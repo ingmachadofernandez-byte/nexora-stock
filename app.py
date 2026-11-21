@@ -67,17 +67,19 @@ st.session_state.setdefault("sonido_activo", True)
 st.session_state.setdefault("ultimo_resultado", None)
 st.session_state.setdefault("codigo_pendiente_alta", None)
 
-st.title("📦 MD STOCK")
-st.caption("Operación Scan-First • Captura de Código y Registro Directo")
+# 1. Contenedor del encabezado, contexto operativo y sonido
+with st.container(border=True):
+    st.title("📦 MD STOCK")
+    st.caption("Operación Scan-First • Captura de Código y Registro Directo")
 
-col_ctx, col_snd = st.columns([3, 1])
-with col_ctx:
-    contexto = st.selectbox(
-        "Contexto Operativo",
-        ["RECEPCION", "TRASLADO", "CONSULTA / STOCK"],
-    )
-with col_snd:
-    st.session_state["sonido_activo"] = st.toggle("🔊 Sonido", value=st.session_state["sonido_activo"])
+    col_ctx, col_snd = st.columns([3, 1])
+    with col_ctx:
+        contexto = st.selectbox(
+            "Contexto Operativo",
+            ["RECEPCION", "TRASLADO", "CONSULTA / STOCK"],
+        )
+    with col_snd:
+        st.session_state["sonido_activo"] = st.toggle("🔊 Sonido", value=st.session_state["sonido_activo"])
 
 # Si la cámara devolvió un código en query_params (por ejemplo ?code=7501054500193)
 codigo_url = st.query_params.get("code", None)
@@ -200,7 +202,7 @@ if codigo_nuevo:
                         (sku, codigo_nuevo, nombre.strip()),
                     )
 
-                    # Verifica si ya existe el SKU en productos (por si el INSERT OR IGNORE se saltó)
+                    # Verifica si ya existe el SKU en productos
                     row_prod = cur.execute(
                         "SELECT sku FROM productos WHERE codigo_barras = ? OR sku = ?",
                         (codigo_nuevo, sku),
@@ -243,24 +245,24 @@ if codigo_nuevo:
                     }
                     st.rerun()
 
-st.divider()
-
-if contexto == "RECEPCION":
-    render_modulo_recepcion(res, st.session_state["usuario"], st.session_state["sonido_activo"])
-elif contexto == "TRASLADO":
-    render_modulo_traslado(res, st.session_state["usuario"], st.session_state["sonido_activo"])
-else:
-    st.subheader("📊 Inventario Actual")
-    conn = get_connection()
-    df_inv = pd.read_sql_query(
-        """
-        SELECT i.ubicacion_qr AS Ubicacion, i.sku AS SKU, p.nombre AS Producto,
-               i.lote AS Lote, i.fecha_vencimiento AS Vencimiento, i.cantidad AS Cantidad
-        FROM inventario i
-        LEFT JOIN productos p ON i.sku = p.sku
-        ORDER BY i.id DESC
-        """,
-        conn,
-    )
-    conn.close()
-    st.dataframe(df_inv, use_container_width=True, hide_index=True)
+# 2. Contenedor para el módulo activo (Recepción, Traslado, Inventario Actual)
+with st.container(border=True):
+    if contexto == "RECEPCION":
+        render_modulo_recepcion(res, st.session_state["usuario"], st.session_state["sonido_activo"])
+    elif contexto == "TRASLADO":
+        render_modulo_traslado(res, st.session_state["usuario"], st.session_state["sonido_activo"])
+    else:
+        st.subheader("📊 Inventario Actual")
+        conn = get_connection()
+        df_inv = pd.read_sql_query(
+            """
+            SELECT i.ubicacion_qr AS Ubicacion, i.sku AS SKU, p.nombre AS Producto,
+                   i.lote AS Lote, i.fecha_vencimiento AS Vencimiento, i.cantidad AS Cantidad
+            FROM inventario i
+            LEFT JOIN productos p ON i.sku = p.sku
+            ORDER BY i.id DESC
+            """,
+            conn,
+        )
+        conn.close()
+        st.dataframe(df_inv, use_container_width=True, hide_index=True)
