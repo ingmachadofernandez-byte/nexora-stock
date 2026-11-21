@@ -7,22 +7,23 @@ from core.scan_engine import ScanEngine
 
 def render_camera_scanner():
     """
-    Escáner de cámara móvil con html5-qrcode.
-    Recuadro rectangular compacto para códigos de barras/QR y envío de ?code= a la app.
+    Escáner de cámara móvil con Quagga2 especializado en códigos de barras 1D
+    (EAN-13, CODE-128, UPC) para iPhone / Safari / Chrome.
     """
     scanner_html = """
     <style>
-        #reader {
-            width: 100%;
-            max-width: 380px;
+        .scanner-wrap {
+            max-width: 400px;
             margin: 0 auto;
-            border: 2px solid #2563eb;
-            border-radius: 8px;
-            background-color: #f8fafc;
-            overflow: hidden;
-            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
         }
-        #reader button {
+        .scanner-controls {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+        .scanner-btn {
             background-color: #2563eb;
             color: #ffffff;
             border: none;
@@ -31,47 +32,65 @@ def render_camera_scanner():
             font-size: 14px;
             font-weight: 500;
             cursor: pointer;
-            margin: 4px;
         }
-        #reader select {
-            padding: 6px 10px;
-            border-radius: 6px;
-            border: 1px solid #cbd5e1;
-            font-size: 14px;
-            margin: 4px;
-            max-width: 90%;
+        .scanner-btn.secondary {
+            background-color: #475569;
         }
-        #reader a {
-            display: none !important;
+        #quagga-viewport {
+            position: relative;
+            width: 100%;
+            height: 220px;
+            border: 2px solid #2563eb;
+            border-radius: 8px;
+            background-color: #0f172a;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        #quagga-viewport video,
+        #quagga-viewport canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover;
+        }
+        #scanner-feedback {
+            text-align: center;
+            margin-top: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #1e40af;
+            min-height: 20px;
         }
     </style>
 
-    <div id="reader"></div>
-    <div id="scanner-feedback" style="text-align: center; margin-top: 6px; font-weight: 500; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 0.9rem; color: #1e40af;"></div>
+    <div class="scanner-wrap">
+        <div class="scanner-controls">
+            <button type="button" id="btn-start-scan" class="scanner-btn" onclick="iniciarEscaner()">📷 Activar Cámara 1D</button>
+            <button type="button" id="btn-stop-scan" class="scanner-btn secondary" onclick="detenerEscaner()">⏹ Detener</button>
+        </div>
+        <div id="quagga-viewport"></div>
+        <div id="scanner-feedback">Pulsa "Activar Cámara 1D" y enfoca el código de barras horizontalmente.</div>
+    </div>
 
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
     <script>
-        const config = {
-            fps: 15,
-            qrbox: { width: 260, height: 105 },
-            experimentalFeatures: {
-                useBarCodeDetectorIfSupported: true
-            },
-            formatsToSupport: [
-                Html5QrcodeSupportedFormats.EAN_13,
-                Html5QrcodeSupportedFormats.EAN_8,
-                Html5QrcodeSupportedFormats.UPC_A,
-                Html5QrcodeSupportedFormats.UPC_E,
-                Html5QrcodeSupportedFormats.CODE_128,
-                Html5QrcodeSupportedFormats.QR_CODE
-            ]
-        };
+        let escaneoActivo = false;
+        let codigoYaEnviado = false;
 
-        let isScanning = true;
+        function setFeedback(msg, isOk = false) {
+            const el = document.getElementById("scanner-feedback");
+            if (!el) return;
+            el.style.color = isOk ? "#15803d" : "#1e40af";
+            el.innerHTML = msg;
+        }
 
         function enviarCodigoAApp(rawCode) {
+            if (codigoYaEnviado) return;
             const codeClean = String(rawCode || "").trim();
             if (!codeClean) return;
+            codigoYaEnviado = true;
 
             const targets = [];
             try { targets.push(window.top); } catch (e) {}
@@ -92,31 +111,75 @@ def render_camera_scanner():
             }
         }
 
-        function onScanSuccess(decodedText, decodedResult) {
-            if (isScanning && decodedText) {
-                isScanning = false;
-                const limpio = String(decodedText).trim();
-                const feedbackEl = document.getElementById("scanner-feedback");
-                if (feedbackEl) {
-                    feedbackEl.innerHTML = "✅ Código detectado: " + limpio + " — enviando a registro...";
+        function detenerEscaner() {
+            escaneoActivo = false;
+            try {
+                if (window.Quagga) {
+                    Quagga.offDetected(onDetected);
+                    Quagga.stop();
                 }
-                try {
-                    html5QrcodeScanner.clear();
-                } catch (e) {}
-                enviarCodigoAApp(limpio);
+            } catch (e) {}
+            setFeedback("Cámara detenida.");
+        }
+
+        function onDetected(result) {
+            if (!escaneoActivo || codigoYaEnviado) return;
+            const code = result && result.codeResult && result.codeResult.code;
+            if (!code) return;
+
+            escaneoActivo = false;
+            setFeedback("✅ Código detectado: " + code + " — enviando a registro...", true);
+            detenerEscaner();
+            enviarCodigoAApp(code);
+        }
+
+        function iniciarEscaner() {
+            if (!window.Quagga) {
+                setFeedback("⚠️ No cargó el motor Quagga2. Revisa la conexión o usa Entrada Manual.");
+                return;
             }
-        }
+            detenerEscaner();
+            codigoYaEnviado = false;
+            escaneoActivo = true;
+            setFeedback("Iniciando cámara trasera...");
 
-        function onScanFailure(error) {
-            // Ignorar caídas normales de fotograma mientras enfoca el código
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector("#quagga-viewport"),
+                    constraints: {
+                        facingMode: "environment",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                },
+                locator: {
+                    patchSize: "medium",
+                    halfSample: true
+                },
+                numOfWorkers: 2,
+                decoder: {
+                    readers: [
+                        "ean_reader",
+                        "ean_8_reader",
+                        "code_128_reader",
+                        "upc_reader",
+                        "upc_e_reader"
+                    ]
+                },
+                locate: true
+            }, function(err) {
+                if (err) {
+                    escaneoActivo = false;
+                    setFeedback("⚠️ No se pudo iniciar la cámara: " + (err.message || err));
+                    return;
+                }
+                Quagga.onDetected(onDetected);
+                Quagga.start();
+                setFeedback("Cámara activa: alinea el código de barras de forma horizontal.");
+            });
         }
-
-        const html5QrcodeScanner = new Html5QrcodeScanner(
-            "reader",
-            config,
-            /* verbose= */ false
-        );
-        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
     </script>
     """
     components.html(scanner_html, height=320)
@@ -127,12 +190,12 @@ def render_modulo_recepcion(res, usuario, sonido_activo):
 
     modo = st.radio(
         "Método de captura:",
-        ["📷 Cámara Móvil (1080p)", "⌨️ Entrada Manual / Lector"],
+        ["📷 Cámara Móvil (1D)", "⌨️ Entrada Manual / Lector"],
         horizontal=True,
         key="rec_cam_modo",
     )
-    if modo == "📷 Cámara Móvil (1080p)":
-        st.info("Apunta la cámara al código de barras o QR:")
+    if modo == "📷 Cámara Móvil (1D)":
+        st.info("Activa la cámara y apunta horizontalmente al código de barras:")
         render_camera_scanner()
     else:
         with st.form("form_rec_manual_in"):
