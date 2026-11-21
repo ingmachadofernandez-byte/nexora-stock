@@ -53,7 +53,7 @@ def render_camera_scanner():
     <script>
         const config = {
             fps: 15,
-            qrbox: { width: 300, height: 120 },
+            qrbox: { width: 250, height: 110 },
             aspectRatio: 1.777778,
             experimentalFeatures: {
                 useBarCodeDetectorIfSupported: true
