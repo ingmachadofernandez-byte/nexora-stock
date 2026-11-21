@@ -8,13 +8,13 @@ from core.scan_engine import ScanEngine
 def render_camera_scanner():
     """
     Escáner de cámara móvil con html5-qrcode.
-    Recuadro compacto para códigos de barras/QR y envío de ?code= a la app.
+    Recuadro rectangular compacto para códigos de barras/QR y envío de ?code= a la app.
     """
     scanner_html = """
     <style>
         #reader {
             width: 100%;
-            max-width: 360px;
+            max-width: 380px;
             margin: 0 auto;
             border: 2px solid #2563eb;
             border-radius: 8px;
@@ -53,13 +53,7 @@ def render_camera_scanner():
     <script>
         const config = {
             fps: 15,
-            qrbox: { width: 280, height: 110 },
-            videoConstraints: {
-                facingMode: "environment",
-                width: { ideal: 1920 },
-                height: { ideal: 1080 },
-                focusMode: "continuous"
-            },
+            qrbox: { width: 260, height: 105 },
             experimentalFeatures: {
                 useBarCodeDetectorIfSupported: true
             },
@@ -75,40 +69,46 @@ def render_camera_scanner():
 
         let isScanning = true;
 
-        function enviarCodigoAApp(codeValue) {
-            const cleanCode = encodeURIComponent(String(codeValue).trim());
-            try {
-                const topUrl = new URL(window.top.location.href);
-                topUrl.searchParams.set("code", codeValue.trim());
-                window.top.location.href = topUrl.href;
-                return;
-            } catch (e) {}
+        function enviarCodigoAApp(rawCode) {
+            const codeClean = String(rawCode || "").trim();
+            if (!codeClean) return;
 
+            const targets = [];
+            try { targets.push(window.top); } catch (e) {}
             try {
-                const parentUrl = new URL(window.parent.location.href);
-                parentUrl.searchParams.set("code", codeValue.trim());
-                window.parent.location.href = parentUrl.href;
-                return;
+                if (window.parent && !targets.includes(window.parent)) {
+                    targets.push(window.parent);
+                }
             } catch (e) {}
+            targets.push(window);
 
-            const localUrl = new URL(window.location.href);
-            localUrl.searchParams.set("code", codeValue.trim());
-            window.location.href = localUrl.href;
+            for (const win of targets) {
+                try {
+                    const url = new URL(win.location.href);
+                    url.searchParams.set("code", codeClean);
+                    win.location.href = url.toString();
+                    return;
+                } catch (e) {}
+            }
         }
 
         function onScanSuccess(decodedText, decodedResult) {
             if (isScanning && decodedText) {
                 isScanning = false;
-                document.getElementById('scanner-feedback').innerHTML = '✅ Código detectado: ' + decodedText + ' — cargando...';
+                const limpio = String(decodedText).trim();
+                const feedbackEl = document.getElementById("scanner-feedback");
+                if (feedbackEl) {
+                    feedbackEl.innerHTML = "✅ Código detectado: " + limpio + " — enviando a registro...";
+                }
                 try {
                     html5QrcodeScanner.clear();
                 } catch (e) {}
-                enviarCodigoAApp(decodedText);
+                enviarCodigoAApp(limpio);
             }
         }
 
         function onScanFailure(error) {
-            // Ignorar caídas normales de fotograma mientras busca el código
+            // Ignorar caídas normales de fotograma mientras enfoca el código
         }
 
         const html5QrcodeScanner = new Html5QrcodeScanner(
