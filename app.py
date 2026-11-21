@@ -5,6 +5,61 @@ from core.scan_engine import ScanEngine
 from core.operaciones import render_modulo_recepcion, render_modulo_traslado
 
 st.set_page_config(page_title="MD STOCK / NEXORA STOCK", page_icon="📦", layout="centered")
+
+st.markdown(
+    """
+    <style>
+        /* Centrado elegante y respiro visual en escritorio y móvil */
+        .block-container {
+            max-width: 780px;
+            padding-top: 2rem;
+            padding-bottom: 3rem;
+            margin: 0 auto;
+        }
+
+        /* Tarjetas limpias para bloques operativos */
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            border-radius: 14px;
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            background: rgba(15, 23, 42, 0.45);
+            padding: 16px 18px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+        }
+
+        /* Botón principal con acento ejecutivo */
+        .stButton > button[kind="primary"],
+        div[data-testid="stFormSubmitButton"] > button[kind="primary"] {
+            background: linear-gradient(135deg, #1F6AFF 0%, #0EA5E9 100%);
+            color: #FFFFFF;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            padding: 0.6rem 1.2rem;
+            transition: transform 0.12s ease, filter 0.12s ease;
+        }
+
+        .stButton > button[kind="primary"]:hover,
+        div[data-testid="stFormSubmitButton"] > button[kind="primary"]:hover {
+            filter: brightness(1.06);
+            transform: translateY(-1px);
+        }
+
+        /* Inputs con bordes suaves y buen enfoque */
+        div[data-baseweb="input"] > div,
+        div[data-baseweb="select"] > div {
+            border-radius: 9px;
+        }
+
+        /* Espaciado limpio entre opciones de radio */
+        div[data-testid="stRadio"] > div {
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 init_db()
 
 st.session_state.setdefault("usuario", "op1")
