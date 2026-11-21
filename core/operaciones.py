@@ -14,88 +14,50 @@ def render_camera_scanner():
         #reader {
             width: 100%;
             max-width: 450px;
-            min-height: 280px;
+            min-height: 250px;
             margin: 0 auto;
             border: 2px solid #2563eb;
             border-radius: 8px;
-            background-color: #f8fafc;
+            background-color: #000000;
             overflow: hidden;
             box-sizing: border-box;
-        }
-        #reader button {
-            background-color: #2563eb;
-            color: #ffffff;
-            border: none;
-            padding: 8px 14px;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            margin: 4px;
-        }
-        #reader select {
-            padding: 6px 10px;
-            border-radius: 6px;
-            border: 1px solid #cbd5e1;
-            font-size: 14px;
-            margin: 4px;
-            max-width: 90%;
-        }
-        #reader a {
-            display: none !important;
         }
     </style>
 
     <div id="reader"></div>
-    <div id="scanner-feedback" style="text-align: center; margin-top: 6px; font-weight: 500; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 0.9rem; color: #1e40af;"></div>
 
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script>
+        const html5QrCode = new Html5Qrcode("reader");
+
         const config = {
-            fps: 15,
-            qrbox: { width: 250, height: 110 },
-            aspectRatio: 1.777778,
-            experimentalFeatures: {
-                useBarCodeDetectorIfSupported: true
-            },
-            formatsToSupport: [
-                Html5QrcodeSupportedFormats.EAN_13,
-                Html5QrcodeSupportedFormats.EAN_8,
-                Html5QrcodeSupportedFormats.UPC_A,
-                Html5QrcodeSupportedFormats.CODE_128,
-                Html5QrcodeSupportedFormats.QR_CODE
-            ]
+          fps: 12,
+          qrbox: { width: 240, height: 100 },
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.QR_CODE
+          ]
         };
 
-        let isScanning = true;
-        function onScanSuccess(decodedText, decodedResult) {
-            if (isScanning && decodedText) {
-                isScanning = false;
-                document.getElementById('scanner-feedback').innerHTML = '✅ Código detectado: ' + decodedText;
-                try {
-                    html5QrcodeScanner.clear();
-                } catch(e) {}
-                try {
-                    const parentUrl = new URL(window.parent.location.href);
-                    parentUrl.searchParams.set("code", decodedText);
-                    window.parent.location.href = parentUrl.href;
-                } catch(e) {
-                    console.log("Error pasando código:", e);
-                }
-            }
-        }
-
-        function onScanFailure(error) {
-            // Ignorar caídas normales de fotograma
-        }
-
-        // Renderiza el selector de cámara y visor de video en vivo
-        const html5QrcodeScanner = new Html5QrcodeScanner(
-            "reader",
-            config,
-            /* verbose= */ false
-        );
-        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        html5QrCode.start(
+          { facingMode: "environment" },
+          config,
+          (decodedText) => {
+            html5QrCode.stop().catch(() => {});
+            const cleanCode = encodeURIComponent(decodedText.trim());
+            const baseUrl = window.top.location.href.split("?")[0];
+            window.top.location.href = `${baseUrl}?code=${cleanCode}`;
+          },
+          (errorMessage) => {
+            // Ignorar errores continuos de frame mientras busca el código
+          }
+        ).catch((err) => {
+            console.log("Error al iniciar cámara:", err);
+        });
     </script>
     """
     components.html(scanner_html, height=360)
