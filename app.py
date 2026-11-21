@@ -46,6 +46,67 @@ res = st.session_state["ultimo_resultado"]
 if res:
     if res["status"] == "OK":
         st.success(f"✅ {res['mensaje']}")
+        
+        # Si es un producto ya existente en el catálogo, permitir registrar/sumar stock directamente
+        if res.get("tipo") == "PRODUCTO" and res.get("data"):
+            prod = res["data"]
+            with st.container(border=True):
+                st.markdown(f"### 📦 Cargar Stock a Inventario: **{prod['nombre']}** (`{prod['sku']}`)")
+                col1, col2 = st.columns(2)
+                with col1:
+                    cant_exist = st.number_input("Cantidad a ingresar:", min_value=1, value=1, step=1, key="cant_prod_exist")
+                    lote_exist = st.text_input("Lote:", value="LOT-2026A", placeholder="Ej: LOT-2026A", key="lote_prod_exist")
+                with col2:
+                    ub_exist = st.text_input("Ubicación:", value="LOC-REC-01", key="ub_prod_exist")
+                    venc_exist = st.text_input("Vencimiento:", value="N/A", key="venc_prod_exist")
+
+                if st.button("📥 Registrar Producto en Inventario", type="primary", use_container_width=True, key="btn_reg_prod_exist"):
+                    conn = get_connection()
+                    cur = conn.cursor()
+                    lote_val = lote_exist.strip() or "SIN-LOTE"
+                    venc_val = venc_exist.strip() or "N/A"
+                    ub_val = ub_exist.strip() or "LOC-REC-01"
+
+                    existente = cur.execute(
+                        """
+                        SELECT id, cantidad FROM inventario
+                        WHERE ubicacion_qr = ? AND sku = ? AND lote = ?
+                        """,
+                        (ub_val, prod["sku"], lote_val),
+                    ).fetchone()
+
+                    if existente:
+                        cur.execute(
+                            "UPDATE inventario SET cantidad = cantidad + ?, fecha_vencimiento = ? WHERE id = ?",
+                            (int(cant_exist), venc_val, existente["id"]),
+                        )
+                    else:
+                        cur.execute(
+                            """
+                            INSERT INTO inventario (ubicacion_qr, sku, lote, fecha_vencimiento, cantidad)
+                            VALUES (?, ?, ?, ?, ?)
+                            """,
+                            (ub_val, prod["sku"], lote_val, venc_val, int(cant_exist)),
+                        )
+
+                    conn.commit()
+                    conn.close()
+                    ScanEngine.log_event(
+                        st.session_state["usuario"],
+                        contexto,
+                        prod["sku"],
+                        "PRODUCTO",
+                        "OK",
+                        f"Sumadas {cant_exist} UND de {prod['nombre']} en {ub_val} (Lote: {lote_val})"
+                    )
+                    ScanEngine.play_feedback_sound("OK", enabled=st.session_state["sonido_activo"])
+                    st.success(f"✅ ¡Stock actualizado! Se sumaron {cant_exist} UND de '{prod['nombre']}' en {ub_val}.")
+                    st.session_state["ultimo_resultado"] = {
+                        "status": "OK",
+                        "mensaje": f"Ingresadas {cant_exist} UND de {prod['nombre']} en {ub_val}."
+                    }
+                    st.rerun()
+
     elif res["status"] == "DUPLICADO":
         st.warning(f"⚠️ {res['mensaje']}")
     else:
@@ -66,7 +127,7 @@ if codigo_nuevo:
                 vencimiento = st.text_input("Vencimiento", placeholder="Ej: 17/01/2028")
                 ubicacion = st.text_input("Ubicación inicial", value="LOC-REC-01")
 
-            guardar = st.form_submit_button("💾 Guardar Producto y Sumar Stock", type="primary", use_container_width=True)
+            guardar = st.form_submit_button("📥 Registrar Producto en Inventario", type="primary", use_container_width=True)
             if guardar:
                 if not nombre.strip():
                     st.warning("Escribe al menos el nombre del producto.")
