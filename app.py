@@ -1,172 +1,150 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
-try:
-    from streamlit_qrcode_scanner import qrcode_scanner
-except ImportError:
-    from qrcode_scanner import qrcode_scanner
-
 from core.database import init_db, get_connection
 from core.scan_engine import ScanEngine
+from core.operaciones import render_modulo_recepcion, render_modulo_traslado
 
-st.set_page_config(page_title="NEXORA STOCK | Scan Engine", page_icon="📦", layout="centered")
+st.set_page_config(page_title="MD STOCK / NEXORA STOCK", page_icon="📦", layout="centered")
 init_db()
 
-def render_barcode_camera_scanner(key: str = "cam_scanner"):
-    """
-    Renderiza el escáner de cámara móvil de alta resolución (1080p)
-    con configuración optimizada para códigos de barra (EAN-13, UPC, Code-128) y QR.
-    """
-    scanned_from_url = st.query_params.get("barcode_scanned")
-    if scanned_from_url:
-        del st.query_params["barcode_scanned"]
-        return scanned_from_url
+st.session_state.setdefault("usuario", "op1")
+st.session_state.setdefault("sonido_activo", True)
+st.session_state.setdefault("ultimo_resultado", None)
+st.session_state.setdefault("codigo_pendiente_alta", None)
 
-    scanner_html = """
-    <div id="reader" style="width: 100%; max-width: 450px; margin: 0 auto; border-radius: 8px; overflow: hidden;"></div>
-    <div id="scanner-feedback" style="text-align: center; margin-top: 6px; font-weight: 500; font-family: sans-serif; font-size: 0.9rem; color: #1e40af;"></div>
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    <script>
-        const config = {
-            fps: 15,
-            qrbox: { width: 300, height: 120 },
-            aspectRatio: 1.777778,
-            experimentalFeatures: {
-                useBarCodeDetectorIfSupported: true // Usa el acelerador nativo de iPhone/Android/Chrome si está disponible
-            },
-            formatsToSupport: [
-                Html5QrcodeSupportedFormats.EAN_13,
-                Html5QrcodeSupportedFormats.EAN_8,
-                Html5QrcodeSupportedFormats.UPC_A,
-                Html5QrcodeSupportedFormats.CODE_128,
-                Html5QrcodeSupportedFormats.QR_CODE
-            ]
-        };
-
-        let isScanning = true;
-        function onScanSuccess(decodedText, decodedResult) {
-            if (isScanning && decodedText) {
-                isScanning = false;
-                document.getElementById('scanner-feedback').innerHTML = '✅ Código detectado: ' + decodedText;
-                try {
-                    const parentUrl = new URL(window.parent.location.href);
-                    parentUrl.searchParams.set("barcode_scanned", decodedText);
-                    window.parent.location.href = parentUrl.href;
-                } catch(e) {
-                    console.log("Escaneado:", decodedText);
-                }
-            }
-        }
-
-        const html5QrCode = new Html5Qrcode("reader");
-        html5QrCode.start(
-            { 
-                facingMode: "environment",
-                width: { min: 640, ideal: 1920 },
-                height: { min: 480, ideal: 1080 }
-            },
-            config,
-            onScanSuccess
-        ).catch(err => {
-            console.log("Iniciando fallback...");
-        });
-    </script>
-    """
-    components.html(scanner_html, height=350)
-
-    # Soporte complementario mediante qrcode_scanner
-    try:
-        code = qrcode_scanner(key=key)
-        if code:
-            return code
-    except Exception:
-        pass
-
-    return None
-
-# Estado inicial de sesión operativa
-if "usuario" not in st.session_state:
-    st.session_state["usuario"] = "op1"
-if "sonido_activo" not in st.session_state:
-    st.session_state["sonido_activo"] = True
-if "ultimo_resultado" not in st.session_state:
-    st.session_state["ultimo_resultado"] = None
-
-# Encabezado operativo compacto
-st.title("📦 NEXORA STOCK")
-st.caption("Motor Operativo Scan-First • Fase 2: Validación Central de Escaneo")
+st.title("📦 MD STOCK")
+st.caption("Operación Scan-First • Captura de Código y Registro Directo")
 
 col_ctx, col_snd = st.columns([3, 1])
 with col_ctx:
     contexto = st.selectbox(
-        "Contexto Operativo Activo",
-        ["CONSULTA / TEST", "RECEPCION", "PICKING", "VERIFICACION", "DESPACHO", "TRASLADO", "INVENTARIO"],
+        "Contexto Operativo",
+        ["RECEPCION", "TRASLADO", "CONSULTA / STOCK"],
     )
 with col_snd:
     st.session_state["sonido_activo"] = st.toggle("🔊 Sonido", value=st.session_state["sonido_activo"])
 
-st.divider()
-
-# Modo de captura: Lector Bluetooth/Rápido o Cámara Móvil
-modo_lectura = st.radio(
-    "Dispositivo de captura:",
-    ["🔫 Lector Bluetooth / Teclado Rápido", "📷 Cámara Móvil (QR / Códigos)"],
-    horizontal=True,
-)
-
-codigo_capturado = None
-
-if modo_lectura == "🔫 Lector Bluetooth / Teclado Rápido":
-    with st.form("form_scan_hid", clear_on_submit=True):
-        entrada = st.text_input(
-            "Escanea aquí (Lector Bluetooth o escribe un código de prueba y presiona Enter):",
-            placeholder="Ej: 7702001001015, SKU-1001, LOC-A01-N1, PED-2026-001",
-        )
-        submitted = st.form_submit_button("⚡ Procesar Escaneo", use_container_width=True)
-        if submitted and entrada:
-            codigo_capturado = entrada
-else:
-    st.info("Apunta la cámara al código QR o código de barras:")
-    qr_code = render_barcode_camera_scanner()
-    if qr_code:
-        codigo_capturado = qr_code
-
-# Ejecutar Scan Engine si llegó un código
-if codigo_capturado:
-    resultado = ScanEngine.process_scan(
-        raw_code=codigo_capturado,
+# Si la cámara devolvió un código en query_params (por ejemplo ?code=7501054500193)
+codigo_url = st.query_params.get("code", None)
+if codigo_url:
+    del st.query_params["code"]
+    res = ScanEngine.process_scan(
+        raw_code=codigo_url,
         contexto=contexto,
         usuario=st.session_state["usuario"],
     )
-    st.session_state["ultimo_resultado"] = resultado
-    ScanEngine.play_feedback_sound(resultado["status"], enabled=st.session_state["sonido_activo"])
+    st.session_state["ultimo_resultado"] = res
+    ScanEngine.play_feedback_sound(res["status"], enabled=st.session_state["sonido_activo"])
 
-# Mostrar tarjeta de resultado inmediato
+    # Si el código no está registrado, lo guardamos como pendiente de alta rápida
+    if res["status"] == "ERROR":
+        st.session_state["codigo_pendiente_alta"] = codigo_url.strip()
+    else:
+        st.session_state["codigo_pendiente_alta"] = None
+
 res = st.session_state["ultimo_resultado"]
 if res:
     if res["status"] == "OK":
-        st.success(f"✅ **[{res['tipo']}]** {res['mensaje']}")
-        if res["data"]:
-            st.json(res["data"])
+        st.success(f"✅ {res['mensaje']}")
     elif res["status"] == "DUPLICADO":
-        st.warning(f"⚠️ **DUPLICADO:** {res['mensaje']}")
+        st.warning(f"⚠️ {res['mensaje']}")
     else:
-        st.error(f"❌ **ERROR:** {res['mensaje']}")
+        st.error(f"❌ {res['mensaje']}")
 
-# Panel de códigos de prueba rápidos y log de auditoría
-with st.expander("🧪 Códigos de prueba precargados en la BD"):
-    st.markdown("""
-    - **Productos (EAN-13 o SKU):** `7702001001015` (`SKU-1001`), `7702001001022` (`SKU-1002`), `7702001001039` (`SKU-1003`)
-    - **Ubicaciones:** `LOC-A01-N1`, `LOC-A01-N2`, `LOC-REC-01`, `LOC-DES-01`
-    - **Pedidos:** `PED-2026-001`
-    - **Lotes:** `LOT-2026A`, `LOT-2026B`
-    """)
+# Formulario de Alta Rápida + Ingreso a Inventario usando el código ya escaneado
+codigo_nuevo = st.session_state["codigo_pendiente_alta"]
+if codigo_nuevo:
+    with st.container(border=True):
+        st.markdown(f"### 🆕 Registrar y cargar a inventario: `{codigo_nuevo}`")
+        with st.form("form_alta_inventario"):
+            nombre = st.text_input("Nombre del producto", placeholder="Ej: Suplemento / Frasco 120ml")
+            col1, col2 = st.columns(2)
+            with col1:
+                lote = st.text_input("Lote", placeholder="Ej: 01626")
+                cantidad = st.number_input("Cantidad a ingresar", min_value=1, value=1, step=1)
+            with col2:
+                vencimiento = st.text_input("Vencimiento", placeholder="Ej: 17/01/2028")
+                ubicacion = st.text_input("Ubicación inicial", value="LOC-REC-01")
 
-with st.expander("📋 Auditoría en tiempo real (log_escaneos)", expanded=True):
+            guardar = st.form_submit_button("💾 Guardar Producto y Sumar Stock", type="primary", use_container_width=True)
+            if guardar:
+                if not nombre.strip():
+                    st.warning("Escribe al menos el nombre del producto.")
+                else:
+                    conn = get_connection()
+                    cur = conn.cursor()
+                    sku = f"SKU-{codigo_nuevo[-6:]}"
+
+                    # Inserta en catálogo de productos si no existe
+                    cur.execute(
+                        """
+                        INSERT OR IGNORE INTO productos (sku, codigo_barras, nombre, unidad, requiere_lote)
+                        VALUES (?, ?, ?, 'UND', 1)
+                        """,
+                        (sku, codigo_nuevo, nombre.strip()),
+                    )
+
+                    # Verifica si ya existe el SKU en productos (por si el INSERT OR IGNORE se saltó)
+                    row_prod = cur.execute(
+                        "SELECT sku FROM productos WHERE codigo_barras = ? OR sku = ?",
+                        (codigo_nuevo, sku),
+                    ).fetchone()
+                    sku_final = row_prod["sku"] if row_prod else sku
+
+                    # Actualiza o inserta en inventario
+                    lote_val = lote.strip() or "SIN-LOTE"
+                    venc_val = vencimiento.strip() or "N/A"
+                    ub_val = ubicacion.strip() or "LOC-REC-01"
+
+                    existente = cur.execute(
+                        """
+                        SELECT id, cantidad FROM inventario
+                        WHERE ubicacion_qr = ? AND sku = ? AND lote = ?
+                        """,
+                        (ub_val, sku_final, lote_val),
+                    ).fetchone()
+
+                    if existente:
+                        cur.execute(
+                            "UPDATE inventario SET cantidad = cantidad + ?, fecha_vencimiento = ? WHERE id = ?",
+                            (int(cantidad), venc_val, existente["id"]),
+                        )
+                    else:
+                        cur.execute(
+                            """
+                            INSERT INTO inventario (ubicacion_qr, sku, lote, fecha_vencimiento, cantidad)
+                            VALUES (?, ?, ?, ?, ?)
+                            """,
+                            (ub_val, sku_final, lote_val, venc_val, int(cantidad)),
+                        )
+
+                    conn.commit()
+                    conn.close()
+                    st.session_state["codigo_pendiente_alta"] = None
+                    st.session_state["ultimo_resultado"] = {
+                        "status": "OK",
+                        "mensaje": f"Producto '{nombre.strip()}' ({codigo_nuevo}) guardado con {cantidad} UND en {ub_val}.",
+                    }
+                    st.rerun()
+
+st.divider()
+
+if contexto == "RECEPCION":
+    render_modulo_recepcion(res, st.session_state["usuario"], st.session_state["sonido_activo"])
+elif contexto == "TRASLADO":
+    render_modulo_traslado(res, st.session_state["usuario"], st.session_state["sonido_activo"])
+else:
+    st.subheader("📊 Inventario Actual")
     conn = get_connection()
-    df_logs = pd.read_sql_query(
-        "SELECT id, fecha_hora, usuario, contexto, codigo_leido, tipo_codigo, resultado, mensaje FROM log_escaneos ORDER BY id DESC LIMIT 10",
+    df_inv = pd.read_sql_query(
+        """
+        SELECT i.ubicacion_qr AS Ubicacion, i.sku AS SKU, p.nombre AS Producto,
+               i.lote AS Lote, i.fecha_vencimiento AS Vencimiento, i.cantidad AS Cantidad
+        FROM inventario i
+        LEFT JOIN productos p ON i.sku = p.sku
+        ORDER BY i.id DESC
+        """,
         conn,
     )
     conn.close()
-    st.dataframe(df_logs, use_container_width=True, hide_index=True)
+    st.dataframe(df_inv, use_container_width=True, hide_index=True)
