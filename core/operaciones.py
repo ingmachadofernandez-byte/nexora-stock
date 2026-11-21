@@ -53,7 +53,13 @@ def render_camera_scanner():
     <script>
         const config = {
             fps: 15,
-            qrbox: { width: 220, height: 95 },
+            qrbox: { width: 280, height: 110 },
+            videoConstraints: {
+                facingMode: "environment",
+                width: { ideal: 1920 },
+                height: { ideal: 1080 },
+                focusMode: "continuous"
+            },
             experimentalFeatures: {
                 useBarCodeDetectorIfSupported: true
             },
@@ -61,6 +67,7 @@ def render_camera_scanner():
                 Html5QrcodeSupportedFormats.EAN_13,
                 Html5QrcodeSupportedFormats.EAN_8,
                 Html5QrcodeSupportedFormats.UPC_A,
+                Html5QrcodeSupportedFormats.UPC_E,
                 Html5QrcodeSupportedFormats.CODE_128,
                 Html5QrcodeSupportedFormats.QR_CODE
             ]
