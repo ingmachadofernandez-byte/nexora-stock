@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Optional
+from datetime import date
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
@@ -25,6 +26,23 @@ def _asegurar_ubicacion(cur, ubicacion_qr: str) -> str:
         (ub_clean, "Recepción", "General", "Piso", "Ubicación creada automáticamente"),
     )
     return ub_clean
+
+
+def _asegurar_columna_vencimiento(cur) -> None:
+    """Garantiza que exista la columna fecha_vencimiento en 'inventario' sin romper tablas existentes."""
+    cols = [c["name"] for c in cur.execute("PRAGMA table_info(inventario)").fetchall()]
+    if "fecha_vencimiento" not in cols:
+        cur.execute("ALTER TABLE inventario ADD COLUMN fecha_vencimiento TEXT")
+
+
+def _normalizar_vencimiento(fecha_vencimiento: Optional[str]) -> Optional[str]:
+    """Limpia y estandariza la fecha de vencimiento (YYYY-MM-DD) o devuelve None si no aplica."""
+    if fecha_vencimiento is None:
+        return None
+    limpia = str(fecha_vencimiento).strip()
+    if not limpia or limpia.upper() in ("NONE", "NULL", "N/A", "SIN VENCIMIENTO"):
+        return None
+    return limpia
 
 
 def decodificar_imagen_automatica(image_bytes: bytes) -> Optional[str]:
@@ -61,19 +79,24 @@ def registrar_ingreso_automatico(
     cantidad: int = 1,
     ubicacion: str = "LOC-REC-01",
     lote: str = "LOT-AUTO",
+    fecha_vencimiento: Optional[str] = None,
 ):
     """
-    Actualiza el inventario directamente en SQLite sin intervención humana:
+    Actualiza el inventario directamente en SQLite:
     - Si el código/SKU existe en productos, suma cantidad en inventario.
     - Si no existe, crea el producto automáticamente y registra la entrada.
+    - Registra fecha_vencimiento si se suministra y sincroniza con Google Sheets.
     """
     codigo_clean = str(codigo).strip()
     if not codigo_clean:
         return False, "Código vacío."
 
+    venc_clean = _normalizar_vencimiento(fecha_vencimiento)
+
     conn = get_connection()
     try:
         cur = conn.cursor()
+        _asegurar_columna_vencimiento(cur)
 
         # Buscar producto por código de barras o SKU
         prod = cur.execute(
@@ -105,29 +128,46 @@ def registrar_ingreso_automatico(
         ub_clean = _asegurar_ubicacion(cur, ubicacion)
         lote_clean = (lote or "LOT-AUTO").strip().upper() or "LOT-AUTO"
 
-        # Verificar si ya existe registro en inventario para ese SKU, lote y ubicación
-        inv = cur.execute(
-            """SELECT id, cantidad FROM inventario
-               WHERE sku = ? AND lote = ? AND ubicacion_qr = ?""",
-            (sku, lote_clean, ub_clean),
-        ).fetchone()
+        # Buscar registro existente considerando vencimiento si está presente
+        if venc_clean:
+            inv = cur.execute(
+                """SELECT id, cantidad FROM inventario
+                   WHERE sku = ? AND lote = ? AND ubicacion_qr = ?
+                     AND COALESCE(fecha_vencimiento, '') = ?""",
+                (sku, lote_clean, ub_clean, venc_clean),
+            ).fetchone()
+        else:
+            inv = cur.execute(
+                """SELECT id, cantidad FROM inventario
+                   WHERE sku = ? AND lote = ? AND ubicacion_qr = ?""",
+                (sku, lote_clean, ub_clean),
+            ).fetchone()
 
         if inv:
             nueva_cant = int(inv["cantidad"]) + int(cantidad)
-            cur.execute(
-                "UPDATE inventario SET cantidad = ? WHERE id = ?",
-                (nueva_cant, inv["id"]),
-            )
+            if venc_clean:
+                cur.execute(
+                    """UPDATE inventario
+                       SET cantidad = ?, fecha_vencimiento = COALESCE(fecha_vencimiento, ?)
+                       WHERE id = ?""",
+                    (nueva_cant, venc_clean, inv["id"]),
+                )
+            else:
+                cur.execute(
+                    "UPDATE inventario SET cantidad = ? WHERE id = ?",
+                    (nueva_cant, inv["id"]),
+                )
         else:
             nueva_cant = int(cantidad)
             cur.execute(
-                """INSERT INTO inventario (sku, lote, ubicacion_qr, cantidad)
-                   VALUES (?, ?, ?, ?)""",
-                (sku, lote_clean, ub_clean, nueva_cant),
+                """INSERT INTO inventario (sku, lote, ubicacion_qr, cantidad, fecha_vencimiento)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (sku, lote_clean, ub_clean, nueva_cant, venc_clean),
             )
 
         conn.commit()
 
+        detalle_venc = f" | Venc: {venc_clean}" if venc_clean else ""
         ok_sheets, msg_sheets = sincronizar_movimiento_a_sheets(
             usuario=usuario,
             tipo_movimiento="RECEPCION",
@@ -135,25 +175,27 @@ def registrar_ingreso_automatico(
             ubicacion=ub_clean,
             lote=lote_clean,
             cantidad=int(cantidad),
-            detalle=f"Ingreso {codigo_clean} ({nombre}) | Stock ubicacion: {nueva_cant}",
+            detalle=f"Ingreso {codigo_clean} ({nombre}){detalle_venc} | Stock ubicacion: {nueva_cant}",
         )
     finally:
         conn.close()
 
+    detalle_venc_log = f" | Venc: {venc_clean}" if venc_clean else ""
     ScanEngine.log_event(
         usuario,
         "RECEPCION_AUTO",
         sku,
         "PRODUCTO",
         "OK",
-        f"Ingreso automático +{cantidad} UND ({codigo_clean}) en {ub_clean} | Total: {nueva_cant}",
+        f"Ingreso automático +{cantidad} UND ({codigo_clean}) en {ub_clean}{detalle_venc_log} | Total: {nueva_cant}",
     )
     ScanEngine.play_feedback_sound("OK", enabled=sonido_activo)
 
     aviso_sheets = "" if ok_sheets else f"\n⚠️ Nota Sheets: {msg_sheets}"
+    texto_venc = f" | Venc: {venc_clean}" if venc_clean else ""
     return (
         True,
-        f"✅ Código {codigo_clean} ({nombre}) detectado y sumado (+{cantidad} UND) en {ub_clean}. Stock en ubicación: {nueva_cant} UND.{aviso_sheets}",
+        f"✅ Código {codigo_clean} ({nombre}) detectado y sumado (+{cantidad} UND) en {ub_clean}{texto_venc}. Stock en ubicación: {nueva_cant} UND.{aviso_sheets}",
     )
 
 
@@ -238,6 +280,51 @@ def render_camera_scanner():
     components.html(scanner_html, height=290)
 
 
+def _render_respaldo_rapido_codigo(usuario: str, sonido_activo: bool, key_prefix: str = "resp_rapido"):
+    """Formulario de respaldo ágil cuando la cámara no logra leer el código en campo."""
+    with st.expander("⚡ Respaldo rápido si el código no lee", expanded=False):
+        with st.form(f"form_{key_prefix}"):
+            cod_resp = st.text_input(
+                "Código de barras o SKU *",
+                placeholder="Digita o pega el código si no escanea",
+            )
+            c1, c2 = st.columns(2)
+            with c1:
+                cant_resp = st.number_input("Cantidad (UND):", min_value=1, value=1, step=1)
+                lote_resp = st.text_input("Lote:", value="LOT-AUTO")
+            with c2:
+                ubic_resp = st.text_input("Ubicación:", value="LOC-REC-01")
+                tiene_venc_resp = st.checkbox("Registrar fecha de vencimiento", value=False)
+
+            fecha_venc_resp = None
+            if tiene_venc_resp:
+                fecha_venc_resp = st.date_input(
+                    "Fecha de vencimiento:",
+                    value=date.today(),
+                ).strftime("%Y-%m-%d")
+
+            enviar_resp = st.form_submit_button(
+                "✅ Guardar con respaldo rápido", type="primary", use_container_width=True
+            )
+            if enviar_resp:
+                if not cod_resp or not cod_resp.strip():
+                    st.error("Escribe el código de barras o SKU para guardar el respaldo.")
+                else:
+                    ok, msg = registrar_ingreso_automatico(
+                        codigo=cod_resp.strip(),
+                        usuario=usuario,
+                        sonido_activo=sonido_activo,
+                        cantidad=int(cant_resp),
+                        ubicacion=(ubic_resp or "LOC-REC-01").strip().upper(),
+                        lote=(lote_resp or "LOT-AUTO").strip().upper(),
+                        fecha_vencimiento=fecha_venc_resp,
+                    )
+                    if ok:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+
+
 def render_modulo_recepcion(res, usuario, sonido_activo):
     st.subheader("📥 Módulo de Recepción (Automático + Respaldo)")
 
@@ -263,11 +350,28 @@ def render_modulo_recepcion(res, usuario, sonido_activo):
 
     if modo == "📸 Foto Automática (Sin intervención)":
         st.info("Toma una foto nítida al código de barras. El sistema lo leerá y sumará +1 UND al inventario automáticamente.")
+
+        col_v1, col_v2 = st.columns([1.4, 1.6])
+        with col_v1:
+            aplicar_venc_foto = st.checkbox(
+                "Asignar fecha de vencimiento a este ingreso",
+                value=False,
+                key="chk_venc_foto_rec",
+            )
+        with col_v2:
+            fecha_venc_foto = None
+            if aplicar_venc_foto:
+                fecha_venc_foto = st.date_input(
+                    "Fecha de vencimiento",
+                    value=date.today(),
+                    key="date_venc_foto_rec",
+                ).strftime("%Y-%m-%d")
+
         foto = st.camera_input("Capturar código de barras", key="cam_auto_recepcion")
 
         if foto is not None:
             img_bytes = foto.getvalue()
-            foto_hash = hash(img_bytes)
+            foto_hash = hash((img_bytes, fecha_venc_foto))
 
             if st.session_state.get("ultima_foto_procesada") != foto_hash:
                 with st.spinner("Leyendo código y actualizando inventario automáticamente..."):
@@ -275,16 +379,24 @@ def render_modulo_recepcion(res, usuario, sonido_activo):
 
                 if codigo_leido:
                     st.session_state["ultima_foto_procesada"] = foto_hash
-                    ok, msg = registrar_ingreso_automatico(codigo_leido, usuario, sonido_activo)
+                    ok, msg = registrar_ingreso_automatico(
+                        codigo_leido,
+                        usuario,
+                        sonido_activo,
+                        fecha_vencimiento=fecha_venc_foto,
+                    )
                     if ok:
                         st.success(msg)
                         st.balloons()
                 else:
-                    st.warning("⚠️ No se logró distinguir el código en esa foto. Acerca un poco más el código con buena luz y toma otra foto.")
+                    st.warning("⚠️ No se logró distinguir el código en esa foto. Acerca un poco más el código con buena luz, toma otra foto o usa el respaldo rápido de abajo.")
+
+        _render_respaldo_rapido_codigo(usuario, sonido_activo, key_prefix="resp_foto_rec")
 
     elif modo == "📷 Escáner Video en Vivo":
         st.info("Apunta horizontalmente al código de barras para captura y registro automático:")
         render_camera_scanner()
+        _render_respaldo_rapido_codigo(usuario, sonido_activo, key_prefix="resp_video_rec")
 
     else:
         with st.form("form_rec_manual_in"):
@@ -295,8 +407,18 @@ def render_modulo_recepcion(res, usuario, sonido_activo):
             col_m1, col_m2 = st.columns(2)
             with col_m1:
                 cant_in = st.number_input("Cantidad:", min_value=1, value=1, step=1)
+                lote_in = st.text_input("Lote:", value="LOT-AUTO")
             with col_m2:
                 ubic_in = st.text_input("Ubicación:", value="LOC-REC-01")
+                tiene_venc_in = st.checkbox("Registrar fecha de vencimiento", value=False)
+
+            fecha_venc_in = None
+            if tiene_venc_in:
+                fecha_venc_in = st.date_input(
+                    "Fecha de vencimiento:",
+                    value=date.today(),
+                    key="date_venc_manual_rec",
+                ).strftime("%Y-%m-%d")
 
             submitted = st.form_submit_button(
                 "⚡ Registrar en Inventario", type="primary", use_container_width=True
@@ -307,7 +429,9 @@ def render_modulo_recepcion(res, usuario, sonido_activo):
                     usuario,
                     sonido_activo,
                     cantidad=int(cant_in),
-                    ubicacion=ubic_in.strip().upper() or "LOC-REC-01",
+                    ubicacion=(ubic_in or "LOC-REC-01").strip().upper(),
+                    lote=(lote_in or "LOT-AUTO").strip().upper(),
+                    fecha_vencimiento=fecha_venc_in,
                 )
                 if ok:
                     st.success(msg)
