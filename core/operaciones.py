@@ -6,6 +6,7 @@ import pandas as pd
 from io import BytesIO
 from PIL import Image, ImageOps
 from core.database import get_connection
+from core.sheets_sync import sincronizar_movimiento_a_sheets
 from core.scan_engine import ScanEngine
 
 try:
@@ -119,8 +120,21 @@ def registrar_ingreso_automatico(codigo: str, usuario: str, sonido_activo: bool,
             )
 
         conn.commit()
+        
+
+        ok_sheets, msg_sheets = sincronizar_movimiento_a_sheets(
+            usuario=usuario,
+            tipo_movimiento="RECEPCION",
+            sku=sku,
+            ubicacion=ub_clean,
+            lote=lote_clean,
+            cantidad=int(cantidad),
+            detalle=f"Ingreso {codigo_clean} ({nombre}) | Stock ubicacion: {nueva_cant}",
+        )
     finally:
         conn.close()
+    
+    
 
     ScanEngine.log_event(
         usuario,
@@ -131,8 +145,9 @@ def registrar_ingreso_automatico(codigo: str, usuario: str, sonido_activo: bool,
         f"Ingreso automático +{cantidad} UND ({codigo_clean}) en {ub_clean} | Total: {nueva_cant}",
     )
     ScanEngine.play_feedback_sound("OK", enabled=sonido_activo)
-    return True, f"✅ Código {codigo_clean} ({nombre}) detectado y sumado (+{cantidad} UND) en {ub_clean}. Stock en ubicación: {nueva_cant} UND."
 
+aviso_sheets = "" if ok_sheets else f"\n⚠️ Nota Sheets: {msg_sheets}"
+    return True, f"✅ Código {codigo_clean} ({nombre}) detectado y sumado (+{cantidad} UND) en {ub_clean}. Stock en ubicación: {nueva_cant} UND.{aviso_sheets}"
 
 def render_camera_scanner():
     """
