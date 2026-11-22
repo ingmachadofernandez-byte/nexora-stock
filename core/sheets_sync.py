@@ -21,19 +21,26 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
+DEFAULT_SPREADSHEET_ID = "1MPonaYaN7H5_TC3YHkgzFSnHPau0o4oGc0Jk7Pfcl2g"
+
 
 def _get_spreadsheet():
     if not GSPREAD_AVAILABLE:
         return None, "Falta instalar gspread o google-auth en requirements.txt."
 
-    if "gcp_service_account" not in st.secrets or "spreadsheet_id" not in st.secrets:
-        return None, "Faltan 'gcp_service_account' o 'spreadsheet_id' en Streamlit Secrets."
+    if "gcp_service_account" not in st.secrets:
+        return None, "Falta 'gcp_service_account' en Streamlit Secrets."
+
+    spreadsheet_id = str(
+        st.secrets.get("spreadsheet_id") or DEFAULT_SPREADSHEET_ID
+    ).strip()
+    if not spreadsheet_id:
+        return None, "Falta 'spreadsheet_id' en Streamlit Secrets."
 
     sa_info = dict(st.secrets["gcp_service_account"])
     if "private_key" in sa_info and isinstance(sa_info["private_key"], str):
         sa_info["private_key"] = sa_info["private_key"].replace("\\n", "\n")
 
-    spreadsheet_id = str(st.secrets["spreadsheet_id"]).strip()
     creds = Credentials.from_service_account_info(sa_info, scopes=SCOPES)
     client = gspread.authorize(creds)
     return client.open_by_key(spreadsheet_id), None
@@ -43,7 +50,11 @@ def _get_or_create_worksheet(spreadsheet, title: str, headers: list[str]):
     try:
         ws = spreadsheet.worksheet(title)
     except Exception:
-        ws = spreadsheet.add_worksheet(title=title, rows=1000, cols=max(10, len(headers) + 2))
+        ws = spreadsheet.add_worksheet(
+            title=title,
+            rows=1000,
+            cols=max(10, len(headers) + 2),
+        )
 
     existing = ws.get_all_values()
     if not existing:
@@ -63,7 +74,9 @@ def sincronizar_movimiento_a_sheets(
     try:
         spreadsheet, err = _get_spreadsheet()
         if err or spreadsheet is None:
-            return False, err or "No se pudo abrir la hoja de Google Sheets."
+            msg = err or "No se pudo abrir la hoja de Google Sheets."
+            print(f"[SHEETS_SYNC] {msg}")
+            return False, msg
 
         conn = get_connection()
         try:
@@ -131,4 +144,6 @@ def sincronizar_movimiento_a_sheets(
 
         return True, "Sincronizado con Google Sheets."
     except Exception as exc:
-        return False, f"Error al sincronizar con Google Sheets: {exc}"
+        msg = f"Error al sincronizar con Google Sheets: {exc}"
+        print(f"[SHEETS_SYNC] {msg}")
+        return False, msg
