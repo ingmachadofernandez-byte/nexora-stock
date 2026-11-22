@@ -54,11 +54,18 @@ def decodificar_imagen_automatica(image_bytes: bytes) -> Optional[str]:
     return None
 
 
-def registrar_ingreso_automatico(codigo: str, usuario: str, sonido_activo: bool, cantidad: int = 1, ubicacion: str = "LOC-REC-01", lote: str = "LOT-AUTO"):
+def registrar_ingreso_automatico(
+    codigo: str,
+    usuario: str,
+    sonido_activo: bool,
+    cantidad: int = 1,
+    ubicacion: str = "LOC-REC-01",
+    lote: str = "LOT-AUTO",
+):
     """
     Actualiza el inventario directamente en SQLite sin intervención humana:
-- Si el código/SKU existe en productos, suma cantidad en inventario.
-- Si no existe, crea el producto automáticamente y registra la entrada.
+    - Si el código/SKU existe en productos, suma cantidad en inventario.
+    - Si no existe, crea el producto automáticamente y registra la entrada.
     """
     codigo_clean = str(codigo).strip()
     if not codigo_clean:
@@ -120,7 +127,6 @@ def registrar_ingreso_automatico(codigo: str, usuario: str, sonido_activo: bool,
             )
 
         conn.commit()
-        
 
         ok_sheets, msg_sheets = sincronizar_movimiento_a_sheets(
             usuario=usuario,
@@ -133,8 +139,6 @@ def registrar_ingreso_automatico(codigo: str, usuario: str, sonido_activo: bool,
         )
     finally:
         conn.close()
-    
-    
 
     ScanEngine.log_event(
         usuario,
@@ -146,8 +150,12 @@ def registrar_ingreso_automatico(codigo: str, usuario: str, sonido_activo: bool,
     )
     ScanEngine.play_feedback_sound("OK", enabled=sonido_activo)
 
-aviso_sheets = "" if ok_sheets else f"\n⚠️ Nota Sheets: {msg_sheets}"
-    return True, f"✅ Código {codigo_clean} ({nombre}) detectado y sumado (+{cantidad} UND) en {ub_clean}. Stock en ubicación: {nueva_cant} UND.{aviso_sheets}"
+    aviso_sheets = "" if ok_sheets else f"\n⚠️ Nota Sheets: {msg_sheets}"
+    return (
+        True,
+        f"✅ Código {codigo_clean} ({nombre}) detectado y sumado (+{cantidad} UND) en {ub_clean}. Stock en ubicación: {nueva_cant} UND.{aviso_sheets}",
+    )
+
 
 def render_camera_scanner():
     """
@@ -356,7 +364,7 @@ def render_modulo_traslado(res, usuario, sonido_activo):
             elif orig_ub == dest_ubic.strip().upper():
                 st.warning("La ubicación de destino debe ser diferente al origen.")
             else:
-                dest_ub = _asegurar_ubicacion(get_connection().cursor(), dest_ubic) if False else dest_ubic.strip().upper()
+                dest_ub = dest_ubic.strip().upper()
                 conn = get_connection()
                 try:
                     cur = conn.cursor()
