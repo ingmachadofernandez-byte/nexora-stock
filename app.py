@@ -3,6 +3,8 @@ import pandas as pd
 from core.database import init_db, get_connection
 from core.scan_engine import ScanEngine
 from core.operaciones import render_modulo_recepcion, render_modulo_traslado
+from core.operaciones import render_modulo_recepcion, render_modulo_traslado
+from core.ventas import render_modulo_ventas
 
 st.set_page_config(page_title="MD STOCK / NEXORA STOCK", page_icon="📦", layout="centered")
 
