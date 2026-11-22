@@ -60,6 +60,20 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
+def _asegurar_ubicacion(cur, ubicacion_qr: str):
+    """Garantiza que la ubicación exista en 'ubicaciones' para cumplir con FOREIGN KEY."""
+    ub_clean = (ubicacion_qr or "LOC-REC-01").strip().upper()
+    cur.execute(
+        """
+        INSERT OR IGNORE INTO ubicaciones (codigo_qr, zona, pasillo, nivel, descripcion)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (ub_clean, "Recepción", "General", "Piso", "Ubicación creada automáticamente"),
+    )
+    return ub_clean
+
+
 init_db()
 
 st.session_state.setdefault("usuario", "op1")
@@ -81,10 +95,14 @@ with st.container(border=True):
     with col_snd:
         st.session_state["sonido_activo"] = st.toggle("🔊 Sonido", value=st.session_state["sonido_activo"])
 
-# Si la cámara devolvió un código en query_params (por ejemplo ?code=7501054500193)
-codigo_url = st.query_params.get("code", None)
+# Si la cámara o el escáner devolvió un código en query_params (?code=... o ?auto_code=...)
+codigo_url = st.query_params.get("code", None) or st.query_params.get("auto_code", None)
 if codigo_url:
-    del st.query_params["code"]
+    if "code" in st.query_params:
+        del st.query_params["code"]
+    if "auto_code" in st.query_params:
+        del st.query_params["auto_code"]
+
     res = ScanEngine.process_scan(
         raw_code=codigo_url,
         contexto=contexto,
@@ -103,7 +121,7 @@ res = st.session_state["ultimo_resultado"]
 if res:
     if res["status"] == "OK":
         st.success(f"✅ {res['mensaje']}")
-        
+
         # Si es un producto ya existente en el catálogo, permitir registrar/sumar stock directamente
         if res.get("tipo") == "PRODUCTO" and res.get("data"):
             prod = res["data"]
@@ -119,35 +137,38 @@ if res:
 
                 if st.button("📥 Registrar Producto en Inventario", type="primary", use_container_width=True, key="btn_reg_prod_exist"):
                     conn = get_connection()
-                    cur = conn.cursor()
-                    lote_val = lote_exist.strip() or "SIN-LOTE"
-                    venc_val = venc_exist.strip() or "N/A"
-                    ub_val = ub_exist.strip() or "LOC-REC-01"
+                    try:
+                        cur = conn.cursor()
+                        lote_val = lote_exist.strip() or "SIN-LOTE"
+                        venc_val = venc_exist.strip() or "N/A"
+                        ub_val = _asegurar_ubicacion(cur, ub_exist)
 
-                    existente = cur.execute(
-                        """
-                        SELECT id, cantidad FROM inventario
-                        WHERE ubicacion_qr = ? AND sku = ? AND lote = ?
-                        """,
-                        (ub_val, prod["sku"], lote_val),
-                    ).fetchone()
-
-                    if existente:
-                        cur.execute(
-                            "UPDATE inventario SET cantidad = cantidad + ?, fecha_vencimiento = ? WHERE id = ?",
-                            (int(cant_exist), venc_val, existente["id"]),
-                        )
-                    else:
-                        cur.execute(
+                        existente = cur.execute(
                             """
-                            INSERT INTO inventario (ubicacion_qr, sku, lote, fecha_vencimiento, cantidad)
-                            VALUES (?, ?, ?, ?, ?)
+                            SELECT id, cantidad FROM inventario
+                            WHERE ubicacion_qr = ? AND sku = ? AND lote = ?
                             """,
-                            (ub_val, prod["sku"], lote_val, venc_val, int(cant_exist)),
-                        )
+                            (ub_val, prod["sku"], lote_val),
+                        ).fetchone()
 
-                    conn.commit()
-                    conn.close()
+                        if existente:
+                            cur.execute(
+                                "UPDATE inventario SET cantidad = cantidad + ?, fecha_vencimiento = ? WHERE id = ?",
+                                (int(cant_exist), venc_val, existente["id"]),
+                            )
+                        else:
+                            cur.execute(
+                                """
+                                INSERT INTO inventario (ubicacion_qr, sku, lote, fecha_vencimiento, cantidad)
+                                VALUES (?, ?, ?, ?, ?)
+                                """,
+                                (ub_val, prod["sku"], lote_val, venc_val, int(cant_exist)),
+                            )
+
+                        conn.commit()
+                    finally:
+                        conn.close()
+
                     ScanEngine.log_event(
                         st.session_state["usuario"],
                         contexto,
@@ -190,54 +211,66 @@ if codigo_nuevo:
                     st.warning("Escribe al menos el nombre del producto.")
                 else:
                     conn = get_connection()
-                    cur = conn.cursor()
-                    sku = f"SKU-{codigo_nuevo[-6:]}"
+                    try:
+                        cur = conn.cursor()
+                        sku = f"SKU-{codigo_nuevo[-6:]}"
 
-                    # Inserta en catálogo de productos si no existe
-                    cur.execute(
-                        """
-                        INSERT OR IGNORE INTO productos (sku, codigo_barras, nombre, unidad, requiere_lote)
-                        VALUES (?, ?, ?, 'UND', 1)
-                        """,
-                        (sku, codigo_nuevo, nombre.strip()),
-                    )
-
-                    # Verifica si ya existe el SKU en productos
-                    row_prod = cur.execute(
-                        "SELECT sku FROM productos WHERE codigo_barras = ? OR sku = ?",
-                        (codigo_nuevo, sku),
-                    ).fetchone()
-                    sku_final = row_prod["sku"] if row_prod else sku
-
-                    # Actualiza o inserta en inventario
-                    lote_val = lote.strip() or "SIN-LOTE"
-                    venc_val = vencimiento.strip() or "N/A"
-                    ub_val = ubicacion.strip() or "LOC-REC-01"
-
-                    existente = cur.execute(
-                        """
-                        SELECT id, cantidad FROM inventario
-                        WHERE ubicacion_qr = ? AND sku = ? AND lote = ?
-                        """,
-                        (ub_val, sku_final, lote_val),
-                    ).fetchone()
-
-                    if existente:
-                        cur.execute(
-                            "UPDATE inventario SET cantidad = cantidad + ?, fecha_vencimiento = ? WHERE id = ?",
-                            (int(cantidad), venc_val, existente["id"]),
-                        )
-                    else:
+                        # Inserta en catálogo de productos si no existe
                         cur.execute(
                             """
-                            INSERT INTO inventario (ubicacion_qr, sku, lote, fecha_vencimiento, cantidad)
-                            VALUES (?, ?, ?, ?, ?)
+                            INSERT OR IGNORE INTO productos (sku, codigo_barras, nombre, unidad, requiere_lote)
+                            VALUES (?, ?, ?, 'UND', 1)
                             """,
-                            (ub_val, sku_final, lote_val, venc_val, int(cantidad)),
+                            (sku, codigo_nuevo, nombre.strip()),
                         )
 
-                    conn.commit()
-                    conn.close()
+                        # Verifica si ya existe el SKU en productos
+                        row_prod = cur.execute(
+                            "SELECT sku FROM productos WHERE codigo_barras = ? OR sku = ?",
+                            (codigo_nuevo, sku),
+                        ).fetchone()
+                        sku_final = row_prod["sku"] if row_prod else sku
+
+                        # Actualiza o inserta en inventario asegurando ubicación válida
+                        lote_val = lote.strip() or "SIN-LOTE"
+                        venc_val = vencimiento.strip() or "N/A"
+                        ub_val = _asegurar_ubicacion(cur, ubicacion)
+
+                        existente = cur.execute(
+                            """
+                            SELECT id, cantidad FROM inventario
+                            WHERE ubicacion_qr = ? AND sku = ? AND lote = ?
+                            """,
+                            (ub_val, sku_final, lote_val),
+                        ).fetchone()
+
+                        if existente:
+                            cur.execute(
+                                "UPDATE inventario SET cantidad = cantidad + ?, fecha_vencimiento = ? WHERE id = ?",
+                                (int(cantidad), venc_val, existente["id"]),
+                            )
+                        else:
+                            cur.execute(
+                                """
+                                INSERT INTO inventario (ubicacion_qr, sku, lote, fecha_vencimiento, cantidad)
+                                VALUES (?, ?, ?, ?, ?)
+                                """,
+                                (ub_val, sku_final, lote_val, venc_val, int(cantidad)),
+                            )
+
+                        conn.commit()
+                    finally:
+                        conn.close()
+
+                    ScanEngine.log_event(
+                        st.session_state["usuario"],
+                        contexto,
+                        codigo_nuevo,
+                        "PRODUCTO_NUEVO",
+                        "OK",
+                        f"Alta y carga de {cantidad} UND de '{nombre.strip()}' ({sku_final}) en {ub_val} (Lote: {lote_val})"
+                    )
+                    ScanEngine.play_feedback_sound("OK", enabled=st.session_state["sonido_activo"])
                     st.session_state["codigo_pendiente_alta"] = None
                     st.session_state["ultimo_resultado"] = {
                         "status": "OK",
@@ -254,15 +287,17 @@ with st.container(border=True):
     else:
         st.subheader("📊 Inventario Actual")
         conn = get_connection()
-        df_inv = pd.read_sql_query(
-            """
-            SELECT i.ubicacion_qr AS Ubicacion, i.sku AS SKU, p.nombre AS Producto,
-                   i.lote AS Lote, i.fecha_vencimiento AS Vencimiento, i.cantidad AS Cantidad
-            FROM inventario i
-            LEFT JOIN productos p ON i.sku = p.sku
-            ORDER BY i.id DESC
-            """,
-            conn,
-        )
-        conn.close()
+        try:
+            df_inv = pd.read_sql_query(
+                """
+                SELECT i.ubicacion_qr AS Ubicacion, i.sku AS SKU, p.nombre AS Producto,
+                       i.lote AS Lote, i.fecha_vencimiento AS Vencimiento, i.cantidad AS Cantidad
+                FROM inventario i
+                LEFT JOIN productos p ON i.sku = p.sku
+                ORDER BY i.id DESC
+                """,
+                conn,
+            )
+        finally:
+            conn.close()
         st.dataframe(df_inv, use_container_width=True, hide_index=True)

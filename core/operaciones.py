@@ -15,6 +15,17 @@ except Exception:
     PYZBAR_AVAILABLE = False
 
 
+def _asegurar_ubicacion(cur, ubicacion_qr: str) -> str:
+    """Garantiza que la ubicación exista en 'ubicaciones' para cumplir con FOREIGN KEY."""
+    ub_clean = (ubicacion_qr or "LOC-REC-01").strip().upper()
+    cur.execute(
+        """INSERT OR IGNORE INTO ubicaciones (codigo_qr, zona, pasillo, nivel, descripcion)
+           VALUES (?, ?, ?, ?, ?)""",
+        (ub_clean, "Recepción", "General", "Piso", "Ubicación creada automáticamente"),
+    )
+    return ub_clean
+
+
 def decodificar_imagen_automatica(image_bytes: bytes) -> Optional[str]:
     """
     Decodifica códigos de barras 1D/QR desde una foto capturada con el celular,
@@ -45,66 +56,71 @@ def decodificar_imagen_automatica(image_bytes: bytes) -> Optional[str]:
 def registrar_ingreso_automatico(codigo: str, usuario: str, sonido_activo: bool, cantidad: int = 1, ubicacion: str = "LOC-REC-01", lote: str = "LOT-AUTO"):
     """
     Actualiza el inventario directamente en SQLite sin intervención humana:
-    - Si el código/SKU existe en productos, suma cantidad en inventario.
-    - Si no existe, crea el producto automáticamente y registra la entrada.
+- Si el código/SKU existe en productos, suma cantidad en inventario.
+- Si no existe, crea el producto automáticamente y registra la entrada.
     """
     codigo_clean = str(codigo).strip()
     if not codigo_clean:
         return False, "Código vacío."
 
     conn = get_connection()
-    cur = conn.cursor()
+    try:
+        cur = conn.cursor()
 
-    # Buscar producto por código de barras o SKU
-    prod = cur.execute(
-        "SELECT sku, nombre FROM productos WHERE codigo_barras = ? OR sku = ?",
-        (codigo_clean, codigo_clean),
-    ).fetchone()
+        # Buscar producto por código de barras o SKU
+        prod = cur.execute(
+            "SELECT sku, nombre FROM productos WHERE codigo_barras = ? OR sku = ?",
+            (codigo_clean, codigo_clean),
+        ).fetchone()
 
-    if prod:
-        sku = prod["sku"]
-        nombre = prod["nombre"]
-    else:
-        sufijo = codigo_clean[-6:] if len(codigo_clean) >= 6 else codigo_clean
-        sku = f"SKU-{sufijo}"
-        nombre = f"Producto {codigo_clean}"
-        cols = [c["name"] for c in cur.execute("PRAGMA table_info(productos)").fetchall()]
-        if "categoria" in cols:
+        if prod:
+            sku = prod["sku"]
+            nombre = prod["nombre"]
+        else:
+            sufijo = codigo_clean[-6:] if len(codigo_clean) >= 6 else codigo_clean
+            sku = f"SKU-{sufijo}"
+            nombre = f"Producto {codigo_clean}"
+            cols = [c["name"] for c in cur.execute("PRAGMA table_info(productos)").fetchall()]
+            if "categoria" in cols:
+                cur.execute(
+                    """INSERT OR IGNORE INTO productos (sku, codigo_barras, nombre, categoria, unidad)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (sku, codigo_clean, nombre, "General", "UND"),
+                )
+            else:
+                cur.execute(
+                    """INSERT OR IGNORE INTO productos (sku, codigo_barras, nombre, unidad, requiere_lote)
+                       VALUES (?, ?, ?, 'UND', 1)""",
+                    (sku, codigo_clean, nombre),
+                )
+
+        ub_clean = _asegurar_ubicacion(cur, ubicacion)
+        lote_clean = (lote or "LOT-AUTO").strip().upper() or "LOT-AUTO"
+
+        # Verificar si ya existe registro en inventario para ese SKU, lote y ubicación
+        inv = cur.execute(
+            """SELECT id, cantidad FROM inventario
+               WHERE sku = ? AND lote = ? AND ubicacion_qr = ?""",
+            (sku, lote_clean, ub_clean),
+        ).fetchone()
+
+        if inv:
+            nueva_cant = int(inv["cantidad"]) + int(cantidad)
             cur.execute(
-                """INSERT OR IGNORE INTO productos (sku, codigo_barras, nombre, categoria, unidad)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (sku, codigo_clean, nombre, "General", "UND"),
+                "UPDATE inventario SET cantidad = ? WHERE id = ?",
+                (nueva_cant, inv["id"]),
             )
         else:
+            nueva_cant = int(cantidad)
             cur.execute(
-                """INSERT OR IGNORE INTO productos (sku, codigo_barras, nombre, unidad, requiere_lote)
-                   VALUES (?, ?, ?, 'UND', 1)""",
-                (sku, codigo_clean, nombre),
+                """INSERT INTO inventario (sku, lote, ubicacion_qr, cantidad)
+                   VALUES (?, ?, ?, ?)""",
+                (sku, lote_clean, ub_clean, nueva_cant),
             )
 
-    # Verificar si ya existe registro en inventario para ese SKU, lote y ubicación
-    inv = cur.execute(
-        """SELECT id, cantidad FROM inventario
-           WHERE sku = ? AND lote = ? AND ubicacion_qr = ?""",
-        (sku, lote, ubicacion),
-    ).fetchone()
-
-    if inv:
-        nueva_cant = int(inv["cantidad"]) + int(cantidad)
-        cur.execute(
-            "UPDATE inventario SET cantidad = ? WHERE id = ?",
-            (nueva_cant, inv["id"]),
-        )
-    else:
-        nueva_cant = int(cantidad)
-        cur.execute(
-            """INSERT INTO inventario (sku, lote, ubicacion_qr, cantidad)
-               VALUES (?, ?, ?, ?)""",
-            (sku, lote, ubicacion, nueva_cant),
-        )
-
-    conn.commit()
-    conn.close()
+        conn.commit()
+    finally:
+        conn.close()
 
     ScanEngine.log_event(
         usuario,
@@ -112,10 +128,10 @@ def registrar_ingreso_automatico(codigo: str, usuario: str, sonido_activo: bool,
         sku,
         "PRODUCTO",
         "OK",
-        f"Ingreso automático +{cantidad} UND ({codigo_clean}) en {ubicacion} | Total: {nueva_cant}",
+        f"Ingreso automático +{cantidad} UND ({codigo_clean}) en {ub_clean} | Total: {nueva_cant}",
     )
     ScanEngine.play_feedback_sound("OK", enabled=sonido_activo)
-    return True, f"✅ Código {codigo_clean} ({nombre}) detectado y sumado (+{cantidad} UND) en {ubicacion}. Stock en ubicación: {nueva_cant} UND."
+    return True, f"✅ Código {codigo_clean} ({nombre}) detectado y sumado (+{cantidad} UND) en {ub_clean}. Stock en ubicación: {nueva_cant} UND."
 
 
 def render_camera_scanner():
@@ -278,12 +294,14 @@ def render_modulo_traslado(res, usuario, sonido_activo):
     st.subheader("🔄 Módulo de Traslado Interno")
 
     conn = get_connection()
-    prods = pd.read_sql_query(
-        """SELECT DISTINCT i.sku, p.nombre, i.ubicacion_qr, i.lote, i.cantidad 
-           FROM inventario i LEFT JOIN productos p ON i.sku = p.sku WHERE i.cantidad > 0""",
-        conn,
-    )
-    conn.close()
+    try:
+        prods = pd.read_sql_query(
+            """SELECT DISTINCT i.sku, p.nombre, i.ubicacion_qr, i.lote, i.cantidad 
+               FROM inventario i LEFT JOIN productos p ON i.sku = p.sku WHERE i.cantidad > 0""",
+            conn,
+        )
+    finally:
+        conn.close()
 
     if prods.empty:
         st.info("No hay inventario disponible para trasladar.")
@@ -323,30 +341,34 @@ def render_modulo_traslado(res, usuario, sonido_activo):
             elif orig_ub == dest_ubic.strip().upper():
                 st.warning("La ubicación de destino debe ser diferente al origen.")
             else:
-                dest_ub = dest_ubic.strip().upper()
+                dest_ub = _asegurar_ubicacion(get_connection().cursor(), dest_ubic) if False else dest_ubic.strip().upper()
                 conn = get_connection()
-                cur = conn.cursor()
-                cur.execute(
-                    """UPDATE inventario SET cantidad = cantidad - ? 
-                       WHERE sku = ? AND lote = ? AND ubicacion_qr = ?""",
-                    (int(cant_traslado), sku, lote, orig_ub),
-                )
-                dest_exist = cur.execute(
-                    """SELECT id FROM inventario WHERE sku = ? AND lote = ? AND ubicacion_qr = ?""",
-                    (sku, lote, dest_ub),
-                ).fetchone()
-                if dest_exist:
+                try:
+                    cur = conn.cursor()
+                    dest_ub = _asegurar_ubicacion(cur, dest_ub)
                     cur.execute(
-                        """UPDATE inventario SET cantidad = cantidad + ? WHERE id = ?""",
-                        (int(cant_traslado), dest_exist["id"]),
+                        """UPDATE inventario SET cantidad = cantidad - ? 
+                           WHERE sku = ? AND lote = ? AND ubicacion_qr = ?""",
+                        (int(cant_traslado), sku, lote, orig_ub),
                     )
-                else:
-                    cur.execute(
-                        """INSERT INTO inventario (sku, lote, ubicacion_qr, cantidad) VALUES (?, ?, ?, ?)""",
-                        (sku, lote, dest_ub, int(cant_traslado)),
-                    )
-                conn.commit()
-                conn.close()
+                    dest_exist = cur.execute(
+                        """SELECT id FROM inventario WHERE sku = ? AND lote = ? AND ubicacion_qr = ?""",
+                        (sku, lote, dest_ub),
+                    ).fetchone()
+                    if dest_exist:
+                        cur.execute(
+                            """UPDATE inventario SET cantidad = cantidad + ? WHERE id = ?""",
+                            (int(cant_traslado), dest_exist["id"]),
+                        )
+                    else:
+                        cur.execute(
+                            """INSERT INTO inventario (sku, lote, ubicacion_qr, cantidad) VALUES (?, ?, ?, ?)""",
+                            (sku, lote, dest_ub, int(cant_traslado)),
+                        )
+                    conn.commit()
+                finally:
+                    conn.close()
+
                 ScanEngine.log_event(
                     usuario,
                     "TRASLADO",
