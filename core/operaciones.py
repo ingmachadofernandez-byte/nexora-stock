@@ -128,35 +128,23 @@ def registrar_ingreso_automatico(
         ub_clean = _asegurar_ubicacion(cur, ubicacion)
         lote_clean = (lote or "LOT-AUTO").strip().upper() or "LOT-AUTO"
 
-        # Buscar registro existente considerando vencimiento si está presente
-        if venc_clean:
-            inv = cur.execute(
-                """SELECT id, cantidad FROM inventario
-                   WHERE sku = ? AND lote = ? AND ubicacion_qr = ?
-                     AND COALESCE(fecha_vencimiento, '') = ?""",
-                (sku, lote_clean, ub_clean, venc_clean),
-            ).fetchone()
-        else:
-            inv = cur.execute(
-                """SELECT id, cantidad FROM inventario
-                   WHERE sku = ? AND lote = ? AND ubicacion_qr = ?""",
-                (sku, lote_clean, ub_clean),
-            ).fetchone()
+        # Buscar registro existente por SKU, lote y ubicación (incluyendo si fecha_vencimiento era NULL)
+        inv = cur.execute(
+            """SELECT id, cantidad, fecha_vencimiento FROM inventario
+               WHERE sku = ? AND lote = ? AND ubicacion_qr = ?""",
+            (sku, lote_clean, ub_clean),
+        ).fetchone()
 
         if inv:
             nueva_cant = int(inv["cantidad"]) + int(cantidad)
-            if venc_clean:
-                cur.execute(
-                    """UPDATE inventario
-                       SET cantidad = ?, fecha_vencimiento = COALESCE(fecha_vencimiento, ?)
-                       WHERE id = ?""",
-                    (nueva_cant, venc_clean, inv["id"]),
-                )
-            else:
-                cur.execute(
-                    "UPDATE inventario SET cantidad = ? WHERE id = ?",
-                    (nueva_cant, inv["id"]),
-                )
+            venc_final = venc_clean if venc_clean else inv["fecha_vencimiento"]
+            cur.execute(
+                """UPDATE inventario
+                   SET cantidad = ?, fecha_vencimiento = ?
+                   WHERE id = ?""",
+                (nueva_cant, venc_final, inv["id"]),
+            )
+            venc_clean = venc_final
         else:
             nueva_cant = int(cantidad)
             cur.execute(
