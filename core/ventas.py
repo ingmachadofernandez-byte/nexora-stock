@@ -296,4 +296,4 @@ def procesar_despacho_venta(
 
     except Exception as e:
         conn.rollback()
-        return False, f"Error al procesar despacho:
+        return False, f"Error al procesar despacho: str "
