@@ -70,9 +70,9 @@ def guardar_foto_comprimida(uploaded_file, prefijo: str, factura: str) -> str:
 
 def obtener_disponibilidad_inventario() -> pd.DataFrame:
   """Consulta el stock disponible de forma segura adaptándose al esquema real de SQLite."""
-    columnas_base = ["id", "sku", "producto", "lote", "ubicacion", "vencimiento", "cantidad"]
-    conn = _get_connection()
-    try:
+columnas_base = ["id", "sku", "producto", "lote", "ubicacion", "vencimiento", "cantidad"]
+conn = _get_connection()
+try:
         cursor = conn.cursor()
         cursor.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='inventario'"
