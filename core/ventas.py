@@ -1,4 +1,3 @@
-cat << 'EOF' > core/ventas.py
 import os
 import sqlite3
 from datetime import datetime
@@ -486,4 +485,3 @@ def render_modulo_ventas(res, usuario, sonido_activo):
             st.info("Aún no hay despachos registrados.")
         else:
             st.dataframe(df_hist, use_container_width=True, hide_index=True)
-EOF
