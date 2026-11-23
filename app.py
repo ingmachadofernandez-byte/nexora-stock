@@ -92,8 +92,7 @@ with st.container(border=True):
     with col_ctx:
         contexto = st.selectbox(
             "Contexto Operativo",
-            ["RECEPCION", "TRASLADO","VENTAS" "CONSULTA / STOCK"],
-        )
+            ["RECEPCION", "TRASLADO", "VENTAS", "CONSULTA / STOCK"]
     with col_snd:
         st.session_state["sonido_activo"] = st.toggle("🔊 Sonido", value=st.session_state["sonido_activo"])
 
@@ -282,11 +281,7 @@ if codigo_nuevo:
 
 # 2. Contenedor para el módulo activo (Recepción, Traslado, Inventario Actual)
 with st.container(border=True):
-    if contexto == "RECEPCION":
-        render_modulo_recepcion(res, st.session_state["usuario"], st.session_state["sonido_activo"])
-    elif contexto == "TRASLADO":
-        render_modulo_traslado(res, st.session_state["usuario"], st.session_state["sonido_activo"])
-    elif contexto == "VENTAS":
+if contexto == "RECEPCION":, elif contexto == "TRASLADO":, elif contexto == "VENTAS":
         render_modulo_ventas(res, st.session_state["usuario"], st.session_state["sonido_activo"])
     else:
         st.subheader("📊 Inventario Actual")
