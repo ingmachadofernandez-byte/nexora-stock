@@ -69,43 +69,69 @@ def guardar_foto_comprimida(uploaded_file, prefijo: str, factura: str) -> str:
 
 
 def obtener_disponibilidad_inventario() -> pd.DataFrame:
-    """Consulta el stock disponible agrupado por SKU, Lote, Ubicación y Vencimiento (FEFO)."""
+  """Consulta el stock disponible de forma segura adaptándose al esquema real de SQLite."""
+    columnas_base = ["id", "sku", "producto", "lote", "ubicacion", "vencimiento", "cantidad"]
     conn = _get_connection()
-    query = """
-        SELECT 
-            i.id,
-            i.sku,
-            COALESCE(p.nombre, 'Producto ' || i.sku) AS producto,
-            i.lote,
-            i.ubicacion_qr AS ubicacion,
-            COALESCE(i.fecha_vencimiento, '9999-12-31') AS vencimiento,
-            i.cantidad
-        FROM inventario i
-        LEFT JOIN productos p ON i.sku = p.sku
-        WHERE i.cantidad > 0
-        ORDER BY i.sku ASC, vencimiento ASC, i.id ASC
-    """
     try:
-        df = pd.read_sql_query(query, conn)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='inventario'"
+        )
+        if cursor.fetchone() is None:
+            return pd.DataFrame(columns=columnas_base)
+
+        cursor.execute("PRAGMA table_info(inventario)")
+        cols_inv = {row[1] for row in cursor.fetchall()}
+
+        col_ub = "ubicacion_qr" if "ubicacion_qr" in cols_inv else ("ubicacion" if "ubicacion" in cols_inv else "'BOD-GEN'")
+        col_lote = "lote" if "lote" in cols_inv else "'SIN-LOTE'"
+        col_venc = (
+            "COALESCE(i.fecha_vencimiento, '9999-12-31')"
+            if "fecha_vencimiento" in cols_inv
+            else "'9999-12-31'"
+        )
+        col_cant = "cantidad" if "cantidad" in cols_inv else "0"
+
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='productos'"
+        )
+        tiene_productos = cursor.fetchone() is not None
+
+        if tiene_productos:
+            query = f"""
+                SELECT
+                    i.id AS id,
+                    i.sku AS sku,
+                    COALESCE(p.nombre, 'Producto ' || i.sku) AS producto,
+                    COALESCE(i.{col_lote}, 'SIN-LOTE') AS lote,
+                    COALESCE(i.{col_ub}, 'BOD-GEN') AS ubicacion,
+                    {col_venc} AS vencimiento,
+                    i.{col_cant} AS cantidad
+                FROM inventario i
+                LEFT JOIN productos p ON i.sku = p.sku
+                WHERE i.{col_cant} > 0
+                ORDER BY i.sku ASC, vencimiento ASC, i.id ASC
+            """
+        else:
+            query = f"""
+                SELECT
+                    id AS id,
+                    sku AS sku,
+                    'Producto ' || sku AS producto,
+                    COALESCE({col_lote}, 'SIN-LOTE') AS lote,
+                    COALESCE({col_ub}, 'BOD-GEN') AS ubicacion,
+                    {col_venc.replace("i.", "")} AS vencimiento,
+                    {col_cant} AS cantidad
+                FROM inventario
+                WHERE {col_cant} > 0
+                ORDER BY sku ASC, vencimiento ASC, id ASC
+            """
+
+        return pd.read_sql_query(query, conn)
     except Exception:
-        query_fallback = """
-            SELECT 
-                id,
-                sku,
-                'Producto ' || sku AS producto,
-                lote,
-                ubicacion_qr AS ubicacion,
-                COALESCE(fecha_vencimiento, '9999-12-31') AS vencimiento,
-                cantidad
-            FROM inventario
-            WHERE cantidad > 0
-            ORDER BY sku ASC, vencimiento ASC, id ASC
-        """
-        df = pd.read_sql_query(query_fallback, conn)
+        return pd.DataFrame(columns=columnas_base)
     finally:
         conn.close()
-    return df
-
 
 def determinar_turno_actual() -> str:
     """Retorna 'AM' antes de la 1:00 PM y 'PM' desde la 1:00 PM (hora Colombia)."""
