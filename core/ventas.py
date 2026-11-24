@@ -38,16 +38,21 @@ def inicializar_tablas_ventas():
             observaciones TEXT
         )
     """)
-
-    cursor.execute("PRAGMA table_info(despachos_evidencia)")
-    columnas = [col[1] for col in cursor.fetchall()]
-    if "verificacion_visual_ok" not in columnas:
-        cursor.execute(
-            "ALTER TABLE despachos_evidencia ADD COLUMN verificacion_visual_ok INTEGER NOT NULL DEFAULT 1"
+cursor.execute("""
+            CREATE TABLE IF NOT EXISTS movimientos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fecha_hora TEXT NOT NULL,
+            usuario TEXT,
+            tipo_movimiento TEXT,
+            sku TEXT,
+            ubicacion TEXT,
+            lote TEXT,
+            cantidad INTEGER,
+            detalle TEXT
         )
-
-    conn.commit()
-    conn.close()
+""")
+conn.commit()
+conn.close()
 
 
 def guardar_foto_comprimida(uploaded_file, prefijo: str, factura: str) -> str:
