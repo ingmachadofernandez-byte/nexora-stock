@@ -8,6 +8,8 @@ import streamlit as st
 import urllib.parse
 from core.sheets_sync import sincronizar_movimiento_a_sheets
 
+
+
 DB_PATH = os.path.join("data", "nexora_stock.db") if os.path.exists(os.path.join("data", "nexora_stock.db")) else "nexora_stock.db"
 EVIDENCIAS_DIR = os.path.join("data", "evidencias")
 
@@ -504,3 +506,36 @@ def render_modulo_ventas(res, usuario, sonido_activo):
             st.info("Aún no hay despachos registrados.")
         else:
             st.dataframe(df_hist, use_container_width=True, hide_index=True)
+def render_notificacion_whatsapp(**kwargs):
+    """Muestra el resumen del último despacho y abre el enlace de WhatsApp al CEO."""
+    telefono_ceo = str(kwargs.get("telefono_ceo") or kwargs.get("ceo_telefono") or "573183572456")
+    telefono_limpio = "".join(ch for ch in telefono_ceo if ch.isdigit())
+    if len(telefono_limpio) == 10 and telefono_limpio.startswith("3"):
+        telefono_limpio = f"57{telefono_limpio}"
+
+    factura = kwargs.get("numero_factura") or kwargs.get("factura") or "N/A"
+    cliente = kwargs.get("cliente") or "Mostrador / General"
+    usuario = kwargs.get("usuario") or "Operador"
+    fecha_hora = kwargs.get("fecha_hora") or ""
+    total_unidades = kwargs.get("total_unidades") or kwargs.get("unidades") or 0
+    observaciones = kwargs.get("observaciones") or ""
+
+    lineas = [
+        "*MD STOCK - REPORTE DE DESPACHO FEFO*",
+        f"*Factura:* {factura}",
+        f"*Cliente:* {cliente}",
+        f"*Unidades despachadas:* {total_unidades}",
+        f"*Responsable:* {usuario}",
+    ]
+    if fecha_hora:
+        lineas.append(f"*Fecha/Hora:* {fecha_hora}")
+    if observaciones:
+        lineas.append(f"*Observaciones:* {observaciones}")
+
+    mensaje = "\n".join(lineas)
+    url_ws = f"https://wa.me/{telefono_limpio}?text={urllib.parse.quote(mensaje)}"
+
+    st.divider()
+    st.subheader("Notificación por WhatsApp al CEO")
+    st.text_area("Mensaje listo para enviar", value=mensaje, height=150, disabled=True)
+    st.link_button("Enviar reporte por WhatsApp", url_ws, use_container_width=True)
