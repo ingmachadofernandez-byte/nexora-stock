@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 from PIL import Image
 import pandas as pd
 import streamlit as st
-
+import urllib.parse
 from core.sheets_sync import sincronizar_movimiento_a_sheets
 
 DB_PATH = "nexora_stock.db"
@@ -456,6 +456,9 @@ def render_modulo_ventas(res, usuario, sonido_activo):
             )
 
             if confirmar_despacho:
+                total_uds_pedido = sum(
+                    int(x["cantidad"]) for x in st.session_state["items_pedido_venta"]
+                )
                 ok, msg = procesar_despacho_venta(
                     numero_factura=numero_factura,
                     cliente=cliente,
@@ -467,6 +470,14 @@ def render_modulo_ventas(res, usuario, sonido_activo):
                     observaciones=observaciones,
                 )
                 if ok:
+                    st.session_state["ultimo_despacho_ws"] = {
+                        "numero_factura": numero_factura.strip(),
+                        "turno": determinar_turno_actual(),
+                        "total_unidades": total_uds_pedido,
+                        "cliente": cliente,
+                        "usuario": usuario,
+                        "observaciones": observaciones,
+                    }
                     st.session_state["items_pedido_venta"] = []
                     if sonido_activo:
                         try:
@@ -478,6 +489,9 @@ def render_modulo_ventas(res, usuario, sonido_activo):
                     st.rerun()
                 else:
                     st.error(msg)
+
+    if st.session_state.get("ultimo_despacho_ws"):
+        render_notificacion_whatsapp(**st.session_state["ultimo_despacho_ws"])
 
     with st.expander("Últimos despachos registrados", expanded=False):
         df_hist = obtener_historial_despachos(limite=20)
