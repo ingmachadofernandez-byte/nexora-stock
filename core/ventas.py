@@ -8,7 +8,7 @@ import streamlit as st
 import urllib.parse
 from core.sheets_sync import sincronizar_movimiento_a_sheets
 
-DB_PATH = "nexora_stock.db"
+DB_PATH = os.path.join("data", "nexora_stock.db") if os.path.exists(os.path.join("data", "nexora_stock.db")) else "nexora_stock.db"
 EVIDENCIAS_DIR = os.path.join("data", "evidencias")
 
 
