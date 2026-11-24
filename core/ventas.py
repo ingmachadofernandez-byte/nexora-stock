@@ -38,8 +38,8 @@ def inicializar_tablas_ventas():
             observaciones TEXT
         )
     """)
-cursor.execute("""
-            CREATE TABLE IF NOT EXISTS movimientos (
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS movimientos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             fecha_hora TEXT NOT NULL,
             usuario TEXT,
@@ -50,9 +50,9 @@ cursor.execute("""
             cantidad INTEGER,
             detalle TEXT
         )
-""")
-conn.commit()
-conn.close()
+    """)
+    conn.commit()
+    conn.close()
 
 
 def guardar_foto_comprimida(uploaded_file, prefijo: str, factura: str) -> str:
