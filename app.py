@@ -4,6 +4,7 @@ import streamlit as st
 from core.database import get_connection, init_db
 from core.operaciones import render_modulo_recepcion, render_modulo_traslado
 from core.ventas import render_modulo_ventas
+from core.tablero_nextura import render_tablero_nextura
 from pathlib import Path
 
 
@@ -37,38 +38,21 @@ def _render_encabezado():
 
 
 def _render_consulta_stock():
-    st.subheader("📊 Consulta / Stock Actual")
+    st.subheader("Consulta / Stock Actual")
     conn = get_connection()
     try:
         query = """
-            SELECT
-                i.ubicacion_qr AS Ubicacion,
-                i.sku AS SKU,
-                COALESCE(p.nombre, 'Producto ' || i.sku) AS Producto,
-                COALESCE(i.lote, 'SIN-LOTE') AS Lote,
-                COALESCE(i.fecha_vencimiento, 'N/A') AS Vencimiento,
-                i.cantidad AS Cantidad
-            FROM inventario i
-            LEFT JOIN productos p ON i.sku = p.sku
-            WHERE i.cantidad > 0
-            ORDER BY i.id DESC
+        SELECT
+            i.ubicacion_qr AS Ubicacion,
+            i.sku AS SKU,
+            COALESCE(p.nombre, 'Producto ' || i.sku) AS Producto,
+            COALESCE(i.lote, 'SIN-LOTE') AS Lote,
+            COALESCE(i.fecha_vencimiento, '') AS Vencimiento,
+            COALESCE(i.cantidad, 0) AS Cantidad
+        FROM inventario i
+        LEFT JOIN productos p ON p.sku = i.sku
         """
-        try:
-            df_inv = pd.read_sql_query(query, conn)
-        except Exception:
-            query_fallback = """
-                SELECT
-                    ubicacion_qr AS Ubicacion,
-                    sku AS SKU,
-                    'Producto ' || sku AS Producto,
-                    COALESCE(lote, 'SIN-LOTE') AS Lote,
-                    COALESCE(fecha_vencimiento, 'N/A') AS Vencimiento,
-                    cantidad AS Cantidad
-                FROM inventario
-                WHERE cantidad > 0
-                ORDER BY id DESC
-            """
-            df_inv = pd.read_sql_query(query_fallback, conn)
+        df_inv = pd.read_sql_query(query, conn)
     finally:
         conn.close()
 
@@ -76,7 +60,6 @@ def _render_consulta_stock():
         st.info("No hay existencias registradas en el inventario en este momento.")
     else:
         st.dataframe(df_inv, use_container_width=True, hide_index=True)
-
 
 def main():
     _inicializar_estado()
@@ -86,7 +69,7 @@ def main():
         _render_encabezado()
         contexto = st.selectbox(
             "Contexto Operativo",
-            ["RECEPCION", "TRASLADO", "VENTAS", "CONSULTA / STOCK"],
+            ["RECEPCION", "TRASLADO", "VENTAS", "CONSULTA / STOCK", "TABLERO / GOBERNANZA"],
             index=0,
             key="selector_contexto_operativo",
         )
