@@ -20,10 +20,16 @@ def _inicializar_estado():
 
 
 def _render_encabezado():
-    logo_path = Path(__file__).resolve().parent.parent / "assets" / "LOGO N .jpeg"
+    base_dir = Path(__file__).resolve().parent
+    candidatos = [
+        base_dir / "assets" / "LOGO N .jpeg",
+        base_dir.parent / "assets" / "LOGO N .jpeg",
+    ]
+    logo_path = next((p for p in candidatos if p.exists()), None)
+
     col_logo, col_texto = st.columns([1, 6], vertical_alignment="center")
     with col_logo:
-        if logo_path.exists():
+        if logo_path is not None:
             st.image(str(logo_path), width=56)
     with col_texto:
         st.markdown("### NEXTURA")
