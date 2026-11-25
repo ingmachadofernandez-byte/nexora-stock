@@ -93,7 +93,8 @@ def main():
                 render_tablero_nextura(conn_tab)
             finally:
                 conn_tab.close()
-            _render_consulta_stock()
+            if contexto == "CONSULTA / STOCK":
+                _render_consulta_stock()
 
 
 if __name__ == "__main__":
