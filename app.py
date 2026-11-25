@@ -30,7 +30,7 @@ def _render_encabezado():
     col_logo, col_texto = st.columns([1, 6], vertical_alignment="center")
     with col_logo:
         if logo_path is not None:
-            st.image(str(logo_path), width=115)
+            st.image(str(logo_path), width=215)
     with col_texto:
         st.markdown("### NEXTURA")
         st.caption("Control Operativo MYD · MD STOCK")
