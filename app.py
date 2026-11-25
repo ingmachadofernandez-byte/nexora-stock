@@ -4,6 +4,8 @@ import streamlit as st
 from core.database import get_connection, init_db
 from core.operaciones import render_modulo_recepcion, render_modulo_traslado
 from core.ventas import render_modulo_ventas
+from pathlib import Path
+
 
 st.set_page_config(
     page_title="MD STOCK / NEXORA STOCK",
@@ -18,16 +20,14 @@ def _inicializar_estado():
 
 
 def _render_encabezado():
-    col_titulo, col_sonido = st.columns([5, 1])
-    with col_titulo:
-        st.title("📦 MD STOCK")
-        st.caption("Operación Scan-First • Captura de Código y Registro Directo")
-    with col_sonido:
-        st.session_state["sonido_activo"] = st.toggle(
-            "Sonido",
-            value=st.session_state["sonido_activo"],
-            key="toggle_sonido_global",
-        )
+    logo_path = Path(__file__).resolve().parent.parent / "assets" / "LOGO N .jpeg"
+    col_logo, col_texto = st.columns([1, 6], vertical_alignment="center")
+    with col_logo:
+        if logo_path.exists():
+            st.image(str(logo_path), width=56)
+    with col_texto:
+        st.markdown("### NEXTURA")
+        st.caption("Control Operativo MYD · MD STOCK")
 
 
 def _render_consulta_stock():
