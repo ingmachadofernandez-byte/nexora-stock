@@ -38,6 +38,12 @@ def _render_encabezado():
 
 
 def _render_consulta_stock():
+elif contexto == "TABLERO / GOBERNANZA":
+conn_tab = get_connection()
+try:
+    render_tablero_nextura(conn_tab)
+finally:
+    conn_tab.close()
     st.subheader("Consulta / Stock Actual")
     conn = get_connection()
     try:
@@ -87,6 +93,12 @@ def main():
             render_modulo_ventas(res, usuario, sonido_activo)
         elif contexto == "CONSULTA / STOCK":
             _render_consulta_stock()
+        elif contexto == "TABLERO / GOBERNANZA":
+            conn_tab = get_connection()
+            try:
+                render_tablero_nextura(conn_tab)
+            finally:
+                conn_tab.close()
 
 
 if __name__ == "__main__":
