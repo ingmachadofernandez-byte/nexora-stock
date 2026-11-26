@@ -209,7 +209,7 @@ def _grafico_barras(df: pd.DataFrame, x_col: str, y_col: str, titulo: str, color
 
 
 def render_tablero_nextura(conn=None, usuario: str = "OPERADOR_MD") -> None:
-    st.subheader("TABLERO DE CONTROL INVENTARIO MYD")
+    st.subheader("Tablero de Control NEXTURA · Gobernanza y Cierre")
     st.caption("Turnos: AM (08:00–13:00) y PM (14:00–17:00) · Tope Principal: 100 und/producto · Alerta CEO: <= 70 und")
 
     if conn is not None:
@@ -245,29 +245,12 @@ def render_tablero_nextura(conn=None, usuario: str = "OPERADOR_MD") -> None:
     total_bod = float(resumen_prod["bodega_und"].sum())
     alertas_df = resumen_prod[resumen_prod["alerta_70"]].copy()
 
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Unidades Totales", f"{total_und:,.1f}")
+    c2.metric("Principal (<=100/prod)", f"{total_prin:,.1f}")
+    c3.metric("Bodega (Excedente)", f"{total_bod:,.1f}")
+    c4.metric("Alerta Reabastecer (<=70)", f"{len(alertas_df)} prod.")
 
-import pandas as _pd_kpi
-_g = globals()
-total_und = _g.get('total_und', 0.0)
-total_prin = _g.get('total_prin', 0.0)
-total_bod = _g.get('total_bod', 0.0)
-alertas_df = _g.get('alertas_df', _pd_kpi.DataFrame())
-c1, c2, c3, c4 = st.columns(4)
-with c1:
-    _v1 = f"{int(round(float(total_und))):,}" if float(total_und).is_integer() else f"{float(total_und):,.1f}"
-    st.markdown("<div style='background:#FFFFFF;border:1px solid #E2E8F0;border-top:3px solid #0B1C2D;border-radius:10px;padding:10px 12px;margin-bottom:8px;'><span style='display:inline-block;background:#E8EEF5;color:#0B1C2D;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;'>Unidades Totales</span><div style='font-size:22px;font-weight:800;color:#0B1C2D;margin-top:6px;line-height:1.15;'>" + _v1 + "</div><div style='font-size:11px;color:#2E2E2E;margin-top:4px;opacity:0.85;'>Existencia global</div></div>", unsafe_allow_html=True)
-with c2:
-    _v2 = f"{int(round(float(total_prin))):,}" if float(total_prin).is_integer() else f"{float(total_prin):,.1f}"
-    st.markdown("<div style='background:#FFFFFF;border:1px solid #E2E8F0;border-top:3px solid #0B1C2D;border-radius:10px;padding:10px 12px;margin-bottom:8px;'><span style='display:inline-block;background:#E8EEF5;color:#0B1C2D;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;'>Principal</span><div style='font-size:22px;font-weight:800;color:#0B1C2D;margin-top:6px;line-height:1.15;'>" + _v2 + "</div><div style='font-size:11px;color:#2E2E2E;margin-top:4px;opacity:0.85;'>Tope 100 und/prod</div></div>", unsafe_allow_html=True)
-with c3:
-    _v3 = f"{int(round(float(total_bod))):,}" if float(total_bod).is_integer() else f"{float(total_bod):,.1f}"
-    st.markdown("<div style='background:#FFFFFF;border:1px solid #E2E8F0;border-top:3px solid #2E2E2E;border-radius:10px;padding:10px 12px;margin-bottom:8px;'><span style='display:inline-block;background:#EFEFEF;color:#2E2E2E;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;'>Bodega</span><div style='font-size:22px;font-weight:800;color:#0B1C2D;margin-top:6px;line-height:1.15;'>" + _v3 + "</div><div style='font-size:11px;color:#2E2E2E;margin-top:4px;opacity:0.85;'>Excedente / respaldo</div></div>", unsafe_allow_html=True)
-with c4:
-    _na = len(alertas_df) if hasattr(alertas_df, '__len__') else 0
-    _ac = '#2FD1A2' if _na == 0 else '#0B1C2D'
-    _bg = '#E6FBF4' if _na == 0 else '#FEF3C7'
-    _fg = '#065F46' if _na == 0 else '#92400E'
-    st.markdown(f"<div style='background:#FFFFFF;border:1px solid #E2E8F0;border-top:3px solid {_ac};border-radius:10px;padding:10px 12px;margin-bottom:8px;'><span style='display:inline-block;background:{_bg};color:{_fg};font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;'>Alerta</span><div style='font-size:22px;font-weight:800;color:#0B1C2D;margin-top:6px;line-height:1.15;'>{_na} prod.</div><div style='font-size:11px;color:#2E2E2E;margin-top:4px;opacity:0.85;'>Umbral &lt;= 70 und</div></div>", unsafe_allow_html=True)
     st.divider()
 
     g1, g2 = st.columns(2)
