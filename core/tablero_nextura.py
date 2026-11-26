@@ -245,7 +245,6 @@ def render_tablero_nextura(conn=None, usuario: str = "OPERADOR_MD") -> None:
     total_bod = float(resumen_prod["bodega_und"].sum())
     alertas_df = resumen_prod[resumen_prod["alerta_70"]].copy()
 
-total_und = total_prin + total_bod
 
 def _fmt_kpi(val: float) -> str:
     return f"{int(round(val)):,}" if float(val).is_integer() else f"{val:,.1f}"
