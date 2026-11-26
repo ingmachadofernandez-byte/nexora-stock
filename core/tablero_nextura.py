@@ -147,57 +147,66 @@ def _asegurar_tablas_gobernanza(conn) -> None:
     conn.commit()
 
 
-def _grafico_barras(df: pd.DataFrame, x_col: str, y_col: str, titulo: str, color_hex: str = "#1F6AFF") -> None:
-    st.markdown(f"**{titulo}**")
+def _grafico_barras(df: pd.DataFrame, x_col: str, y_col: str, titulo: str, color_hex: str = "#0B1C2D") -> None:
+    import html as _html
+
+    st.markdown(f"<div style='font-weight:700;font-size:15px;color:#0B1C2D;margin:8px 0 6px 0;'>{_html.escape(titulo)}</div>", unsafe_allow_html=True)
     if df.empty:
         st.info("Sin registros para graficar todavía.")
         return
+
     df_plot = df[[x_col, y_col]].copy()
     df_plot[x_col] = df_plot[x_col].astype(str)
     df_plot[y_col] = pd.to_numeric(df_plot[y_col], errors="coerce").fillna(0.0)
     df_plot = df_plot.sort_values(by=y_col, ascending=False).reset_index(drop=True)
-    orden_x = df_plot[x_col].tolist()
 
     es_dinero = ("dinero" in y_col.lower()) or ("venta" in y_col.lower()) or ("($)" in titulo.lower())
-    y_titulo = "Valor ($)" if es_dinero else "Unidades"
-    num_fmt = "$#,##0" if es_dinero else "#,##0"
+    max_val = float(df_plot[y_col].max()) if not df_plot.empty else 0.0
+    total_val = float(df_plot[y_col].sum()) if not df_plot.empty else 0.0
 
-    if float(df_plot[y_col].sum()) == 0.0:
-        st.caption(f"Sin movimiento registrado ({'Valor ($): 0' if es_dinero else 'Unidades: 0'}).")
+    def _fmt(v: float) -> str:
+        if es_dinero:
+            return f"${v:,.0f}"
+        if float(v).is_integer():
+            return f"{int(round(v)):,}"
+        return f"{v:,.1f}"
 
-    if HAS_ALTAIR:
-        x_enc = alt.X(
-            f"{x_col}:N",
-            sort=orden_x,
-            title=None,
-            axis=alt.Axis(labelAngle=-20, labelLimit=0),
+    barra_color = "#2FD1A2" if es_dinero else (color_hex if color_hex else "#0B1C2D")
+    if "pérdida" in titulo.lower() or "perdida" in titulo.lower():
+        barra_color = "#C0392B" if total_val > 0 else "#6C7A89"
+
+    filas_html = []
+    for _, row in df_plot.iterrows():
+        etiqueta = _html.escape(str(row[x_col]))
+        valor = float(row[y_col])
+        pct = (valor / max_val * 100.0) if max_val > 0 else 0.0
+        if valor > 0 and pct < 6.0:
+            pct = 6.0
+        val_txt = _html.escape(_fmt(valor))
+        filas_html.append(
+            f"""
+            <div style="margin-bottom:9px;">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;margin-bottom:3px;">
+                    <span style="color:#2E2E2E;font-weight:600;word-break:break-word;flex:1;">{etiqueta}</span>
+                    <span style="color:#0B1C2D;font-weight:700;white-space:nowrap;">{val_txt}</span>
+                </div>
+                <div style="width:100%;background:#ECEFF3;border-radius:6px;height:11px;overflow:hidden;">
+                    <div style="width:{pct:.1f}%;background:{barra_color};height:100%;border-radius:6px;"></div>
+                </div>
+            </div>
+            """
         )
-        y_enc = alt.Y(f"{y_col}:Q", title=y_titulo)
-        barras = (
-            alt.Chart(df_plot)
-            .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4, color=color_hex)
-            .encode(
-                x=x_enc,
-                y=y_enc,
-                tooltip=[
-                    alt.Tooltip(f"{x_col}:N", title=x_col),
-                    alt.Tooltip(f"{y_col}:Q", title=y_titulo, format=num_fmt),
-                ],
-            )
-        )
-        texto = (
-            alt.Chart(df_plot)
-            .mark_text(align="center", baseline="bottom", dy=-4, fontSize=11, fontWeight="bold")
-            .encode(
-                x=x_enc,
-                y=y_enc,
-                text=alt.Text(f"{y_col}:Q", format=num_fmt),
-            )
-        )
-        chart = (barras + texto).properties(height=220)
-        st.altair_chart(chart, use_container_width=True)
-    else:
-        st.bar_chart(df_plot.set_index(x_col)[y_col], height=220)
+
+    nota_cero = ""
+    if total_val == 0.0:
+        nota_cero = "<div style='font-size:11px;color:#666;margin-bottom:6px;'>Sin movimiento en este corte (0).</div>"
+
+    tarjeta = (
+        f"<div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:10px 12px;margin-bottom:10px;'>"
+        f"{nota_cero}{''.join(filas_html)}"
+        f"</div>"
+    )
+    st.markdown(tarjeta, unsafe_allow_html=True)
 
 
 def render_tablero_nextura(conn=None, usuario: str = "OPERADOR_MD") -> None:
