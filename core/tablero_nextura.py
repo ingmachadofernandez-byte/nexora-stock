@@ -261,17 +261,20 @@ def _kpi_badge(titulo_etq: str, valor_txt: str, sub_txt: str, acento: str, fondo
 
 c1, c2, c3, c4 = st.columns(4)
 with c1:
-    st.markdown(_kpi_badge('Unidades Totales', _fmt_kpi(total_und), 'Existencia global', '#0B1C2D', '#E8EEF5', '#0B1C2D'), unsafe_allow_html=True)
+    _v1 = f"{int(round(float(total_und))):,}" if float(total_und).is_integer() else f"{float(total_und):,.1f}"
+    st.markdown("<div style='background:#FFFFFF;border:1px solid #E2E8F0;border-top:3px solid #0B1C2D;border-radius:10px;padding:10px 12px;margin-bottom:8px;'><span style='display:inline-block;background:#E8EEF5;color:#0B1C2D;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;'>Unidades Totales</span><div style='font-size:22px;font-weight:800;color:#0B1C2D;margin-top:6px;line-height:1.15;'>" + _v1 + "</div><div style='font-size:11px;color:#2E2E2E;margin-top:4px;opacity:0.85;'>Existencia global</div></div>", unsafe_allow_html=True)
 with c2:
-    st.markdown(_kpi_badge('Principal', _fmt_kpi(total_prin), 'Tope 100 und/prod', '#0B1C2D', '#E8EEF5', '#0B1C2D'), unsafe_allow_html=True)
+    _v2 = f"{int(round(float(total_prin))):,}" if float(total_prin).is_integer() else f"{float(total_prin):,.1f}"
+    st.markdown("<div style='background:#FFFFFF;border:1px solid #E2E8F0;border-top:3px solid #0B1C2D;border-radius:10px;padding:10px 12px;margin-bottom:8px;'><span style='display:inline-block;background:#E8EEF5;color:#0B1C2D;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;'>Principal</span><div style='font-size:22px;font-weight:800;color:#0B1C2D;margin-top:6px;line-height:1.15;'>" + _v2 + "</div><div style='font-size:11px;color:#2E2E2E;margin-top:4px;opacity:0.85;'>Tope 100 und/prod</div></div>", unsafe_allow_html=True)
 with c3:
-    st.markdown(_kpi_badge('Bodega', _fmt_kpi(total_bod), 'Excedente / respaldo', '#2E2E2E', '#EFEFEF', '#2E2E2E'), unsafe_allow_html=True)
+    _v3 = f"{int(round(float(total_bod))):,}" if float(total_bod).is_integer() else f"{float(total_bod):,.1f}"
+    st.markdown("<div style='background:#FFFFFF;border:1px solid #E2E8F0;border-top:3px solid #2E2E2E;border-radius:10px;padding:10px 12px;margin-bottom:8px;'><span style='display:inline-block;background:#EFEFEF;color:#2E2E2E;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;'>Bodega</span><div style='font-size:22px;font-weight:800;color:#0B1C2D;margin-top:6px;line-height:1.15;'>" + _v3 + "</div><div style='font-size:11px;color:#2E2E2E;margin-top:4px;opacity:0.85;'>Excedente / respaldo</div></div>", unsafe_allow_html=True)
 with c4:
-    _n_alerta = len(alertas_df)
-    _acento_a = '#2FD1A2' if _n_alerta == 0 else '#0B1C2D'
-    _fondo_a = '#E6FBF4' if _n_alerta == 0 else '#FEF3C7'
-    _texto_a = '#065F46' if _n_alerta == 0 else '#92400E'
-    st.markdown(_kpi_badge('Alerta', f'{_n_alerta} prod.', 'Umbral <= 70 und', _acento_a, _fondo_a, _texto_a), unsafe_allow_html=True)
+    _na = len(alertas_df)
+    _ac = '#2FD1A2' if _na == 0 else '#0B1C2D'
+    _bg = '#E6FBF4' if _na == 0 else '#FEF3C7'
+    _fg = '#065F46' if _na == 0 else '#92400E'
+    st.markdown(f"<div style='background:#FFFFFF;border:1px solid #E2E8F0;border-top:3px solid {_ac};border-radius:10px;padding:10px 12px;margin-bottom:8px;'><span style='display:inline-block;background:{_bg};color:{_fg};font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;'>Alerta</span><div style='font-size:22px;font-weight:800;color:#0B1C2D;margin-top:6px;line-height:1.15;'>{_na} prod.</div><div style='font-size:11px;color:#2E2E2E;margin-top:4px;opacity:0.85;'>Umbral &lt;= 70 und</div></div>", unsafe_allow_html=True)
     st.divider()
 
     g1, g2 = st.columns(2)
