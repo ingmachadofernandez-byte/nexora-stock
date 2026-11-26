@@ -288,14 +288,13 @@ def render_tablero_nextura(conn=None, usuario: str = "OPERADOR_MD") -> None:
                 f"Debes reabastecer la estanteria desde Bodega:\n{lista_ceo}"
             )
             st.text_area("Mensaje listo para copiar / enviar al CEO por WhatsApp", value=msg_ceo, height=150)
-                col_wa, col_info = st.columns([1, 2])
-                with col_wa:
-                    wa_url = "https://wa.me/?text=" + urllib.parse.quote(msg_ceo)
-                    st.link_button("📲 Enviar por WhatsApp", wa_url, use_container_width=True)
-                with col_info:
-                    st.caption("Abre WhatsApp con el mensaje precargado o usa el bloque de copia rápida.")
-                st.code(msg_ceo, language=None)
-
+            col_wa, col_info = st.columns([1, 2])
+            with col_wa:
+                wa_url = "https://wa.me/?text=" + urllib.parse.quote(msg_ceo)
+                st.link_button("📲 Enviar por WhatsApp", wa_url, use_container_width=True)
+            with col_info:
+                st.caption("Abre WhatsApp con el mensaje precargado o usa el bloque de copia rápida.")
+            st.code(msg_ceo, language=None)
     with tab_bodega:
         with st.form("form_extraccion_bodega"):
             resp_bod = st.text_input("Responsable que saca de Bodega *", value=usuario)
