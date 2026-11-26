@@ -152,29 +152,41 @@ def _grafico_barras(df: pd.DataFrame, x_col: str, y_col: str, titulo: str, color
     if df.empty:
         st.info("Sin registros para graficar todavía.")
         return
+    df_plot = df.copy()
+    df_plot[y_col] = pd.to_numeric(df_plot[y_col], errors="coerce").fillna(0)
     es_dinero = ("dinero" in y_col.lower()) or ("venta" in y_col.lower()) or ("($)" in titulo.lower())
     y_titulo = "Valor ($)" if es_dinero else "Unidades"
     num_fmt = "$#,##0" if es_dinero else "#,##0"
     if HAS_ALTAIR:
-        base = alt.Chart(df).encode(
-            x=alt.X(f"{x_col}:N", sort="-y", title=None, axis=alt.Axis(labelAngle=-20, labelLimit=0)),
-            y=alt.Y(f"{y_col}:Q", title=y_titulo),
+        x_enc = alt.X(
+            f"{x_col}:N",
+            sort="-y",
+            title=None,
+            axis=alt.Axis(labelAngle=-20, labelLimit=0),
         )
-        barras = base.mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4, color=color_hex).encode(
-            tooltip=[x_col, alt.Tooltip(f"{y_col}:Q", title=y_titulo, format=num_fmt)],
+        y_enc = alt.Y(f"{y_col}:Q", title=y_titulo)
+        barras = (
+            alt.Chart(df_plot)
+            .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4, color=color_hex)
+            .encode(
+                x=x_enc,
+                y=y_enc,
+                tooltip=[x_col, alt.Tooltip(f"{y_col}:Q", title=y_titulo, format=num_fmt)],
+            )
         )
-        etiquetas = base.mark_text(
-            dy=-8,
-            size=11,
-            fontWeight="bold",
-            color="#2E2E2E",
-        ).encode(
-            text=alt.Text(f"{y_col}:Q", format=num_fmt),
+        texto = (
+            alt.Chart(df_plot)
+            .mark_text(dy=-8, fontSize=11, fontWeight="bold")
+            .encode(
+                x=x_enc,
+                y=y_enc,
+                text=alt.Text(f"{y_col}:Q", format=num_fmt),
+            )
         )
-        chart = (barras + etiquetas).properties(height=210)
+        chart = alt.layer(barras, texto).properties(height=220)
         st.altair_chart(chart, use_container_width=True)
     else:
-        st.bar_chart(df.set_index(x_col)[y_col], height=210)
+        st.bar_chart(df_plot.set_index(x_col)[y_col], height=220)
 
 
 def render_tablero_nextura(conn=None, usuario: str = "OPERADOR_MD") -> None:
