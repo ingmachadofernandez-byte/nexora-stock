@@ -246,19 +246,12 @@ def render_tablero_nextura(conn=None, usuario: str = "OPERADOR_MD") -> None:
     alertas_df = resumen_prod[resumen_prod["alerta_70"]].copy()
 
 
-def _fmt_kpi(val: float) -> str:
-    return f"{int(round(val)):,}" if float(val).is_integer() else f"{val:,.1f}"
-
-def _kpi_badge(titulo_etq: str, valor_txt: str, sub_txt: str, acento: str, fondo_etq: str, texto_etq: str) -> str:
-    import html as _h
-    return (
-        f"<div style='background:#FFFFFF;border:1px solid #E2E8F0;border-top:3px solid {acento};border-radius:10px;padding:10px 12px;margin-bottom:8px;'>"
-        f"<span style='display:inline-block;background:{fondo_etq};color:{texto_etq};font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:0.3px;'>{_h.escape(titulo_etq)}</span>"
-        f"<div style='font-size:22px;font-weight:800;color:#0B1C2D;margin-top:6px;line-height:1.15;'>{_h.escape(valor_txt)}</div>"
-        f"<div style='font-size:11px;color:#2E2E2E;margin-top:4px;opacity:0.85;'>{_h.escape(sub_txt)}</div>"
-        f"</div>"
-    )
-
+import pandas as _pd_kpi
+_g = globals()
+total_und = _g.get('total_und', 0.0)
+total_prin = _g.get('total_prin', 0.0)
+total_bod = _g.get('total_bod', 0.0)
+alertas_df = _g.get('alertas_df', _pd_kpi.DataFrame())
 c1, c2, c3, c4 = st.columns(4)
 with c1:
     _v1 = f"{int(round(float(total_und))):,}" if float(total_und).is_integer() else f"{float(total_und):,.1f}"
@@ -270,7 +263,7 @@ with c3:
     _v3 = f"{int(round(float(total_bod))):,}" if float(total_bod).is_integer() else f"{float(total_bod):,.1f}"
     st.markdown("<div style='background:#FFFFFF;border:1px solid #E2E8F0;border-top:3px solid #2E2E2E;border-radius:10px;padding:10px 12px;margin-bottom:8px;'><span style='display:inline-block;background:#EFEFEF;color:#2E2E2E;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;'>Bodega</span><div style='font-size:22px;font-weight:800;color:#0B1C2D;margin-top:6px;line-height:1.15;'>" + _v3 + "</div><div style='font-size:11px;color:#2E2E2E;margin-top:4px;opacity:0.85;'>Excedente / respaldo</div></div>", unsafe_allow_html=True)
 with c4:
-    _na = len(alertas_df)
+    _na = len(alertas_df) if hasattr(alertas_df, '__len__') else 0
     _ac = '#2FD1A2' if _na == 0 else '#0B1C2D'
     _bg = '#E6FBF4' if _na == 0 else '#FEF3C7'
     _fg = '#065F46' if _na == 0 else '#92400E'
