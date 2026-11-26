@@ -175,7 +175,7 @@ def _grafico_barras(df: pd.DataFrame, x_col: str, y_col: str, titulo: str, color
     if "pérdida" in titulo.lower() or "perdida" in titulo.lower():
         barra_color = "#C0392B" if total_val > 0 else "#6C7A89"
 
-    filas_html = []
+    filas = []
     for _, row in df_plot.iterrows():
         etiqueta = _html.escape(str(row[x_col]))
         valor = float(row[y_col])
@@ -183,27 +183,26 @@ def _grafico_barras(df: pd.DataFrame, x_col: str, y_col: str, titulo: str, color
         if valor > 0 and pct < 6.0:
             pct = 6.0
         val_txt = _html.escape(_fmt(valor))
-        filas_html.append(
-            f"""
-            <div style="margin-bottom:9px;">
-                <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;margin-bottom:3px;">
-                    <span style="color:#2E2E2E;font-weight:600;word-break:break-word;flex:1;">{etiqueta}</span>
-                    <span style="color:#0B1C2D;font-weight:700;white-space:nowrap;">{val_txt}</span>
-                </div>
-                <div style="width:100%;background:#ECEFF3;border-radius:6px;height:11px;overflow:hidden;">
-                    <div style="width:{pct:.1f}%;background:{barra_color};height:100%;border-radius:6px;"></div>
-                </div>
-            </div>
-            """
+        fila = (
+            f"<div style='margin-bottom:9px;'>"
+            f"<div style='display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;margin-bottom:3px;'>"
+            f"<span style='color:#2E2E2E;font-weight:600;word-break:break-word;flex:1;'>{etiqueta}</span>"
+            f"<span style='color:#0B1C2D;font-weight:700;white-space:nowrap;'>{val_txt}</span>"
+            f"</div>"
+            f"<div style='width:100%;background:#ECEFF3;border-radius:6px;height:11px;overflow:hidden;'>"
+            f"<div style='width:{pct:.1f}%;background:{barra_color};height:100%;border-radius:6px;'></div>"
+            f"</div>"
+            f"</div>"
         )
+        filas.append(fila)
 
-    nota_cero = ""
-    if total_val == 0.0:
-        nota_cero = "<div style='font-size:11px;color:#666;margin-bottom:6px;'>Sin movimiento en este corte (0).</div>"
-
+    nota_cero = (
+        "<div style='font-size:11px;color:#666;margin-bottom:6px;'>Sin movimiento en este corte (0).</div>"
+        if total_val == 0.0 else ""
+    )
     tarjeta = (
         f"<div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:10px 12px;margin-bottom:10px;'>"
-        f"{nota_cero}{''.join(filas_html)}"
+        f"{nota_cero}{''.join(filas)}"
         f"</div>"
     )
     st.markdown(tarjeta, unsafe_allow_html=True)
