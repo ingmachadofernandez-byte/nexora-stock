@@ -209,7 +209,7 @@ def _grafico_barras(df: pd.DataFrame, x_col: str, y_col: str, titulo: str, color
 
 
 def render_tablero_nextura(conn=None, usuario: str = "OPERADOR_MD") -> None:
-    st.subheader("Tablero de Control NEXTURA · Gobernanza y Cierre")
+    st.subheader("TABLERO DE CONTROL INVENTARIO MYD")
     st.caption("Turnos: AM (08:00–13:00) y PM (14:00–17:00) · Tope Principal: 100 und/producto · Alerta CEO: <= 70 und")
 
     if conn is not None:
@@ -245,11 +245,32 @@ def render_tablero_nextura(conn=None, usuario: str = "OPERADOR_MD") -> None:
     total_bod = float(resumen_prod["bodega_und"].sum())
     alertas_df = resumen_prod[resumen_prod["alerta_70"]].copy()
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Unidades Totales", f"{total_und:,.1f}")
-    c2.metric("Principal (<=100/prod)", f"{total_prin:,.1f}")
-    c3.metric("Bodega (Excedente)", f"{total_bod:,.1f}")
-    c4.metric("Alerta Reabastecer (<=70)", f"{len(alertas_df)} prod.")
+def _fmt_kpi(val: float) -> str:
+    return f"{int(round(val)):,}" if float(val).is_integer() else f"{val:,.1f}"
+
+def _kpi_badge(titulo_etq: str, valor_txt: str, sub_txt: str, acento: str, fondo_etq: str, texto_etq: str) -> str:
+    import html as _h
+    return (
+        f"<div style='background:#FFFFFF;border:1px solid #E2E8F0;border-top:3px solid {acento};border-radius:10px;padding:10px 12px;margin-bottom:8px;'>"
+        f"<span style='display:inline-block;background:{fondo_etq};color:{texto_etq};font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:0.3px;'>{_h.escape(titulo_etq)}</span>"
+        f"<div style='font-size:22px;font-weight:800;color:#0B1C2D;margin-top:6px;line-height:1.15;'>{_h.escape(valor_txt)}</div>"
+        f"<div style='font-size:11px;color:#2E2E2E;margin-top:4px;opacity:0.85;'>{_h.escape(sub_txt)}</div>"
+        f"</div>"
+    )
+
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    st.markdown(_kpi_badge("Unidades Totales", _fmt_kpi(total_und), "Existencia global", "#0B1C2D", "#E8EEF5", "#0B1C2D"), unsafe_allow_html=True)
+with c2:
+    st.markdown(_kpi_badge("Principal", _fmt_kpi(total_prin), "Tope 100 und/prod", "#0B1C2D", "#E8EEF5", "#0B1C2D"), unsafe_allow_html=True)
+with c3:
+    st.markdown(_kpi_badge("Bodega", _fmt_kpi(total_bod), "Excedente / respaldo", "#2E2E2E", "#EFEFEF", "#2E2E2E"), unsafe_allow_html=True)
+with c4:
+    n_alertas = len(alertas_df)
+    acento_alerta = "#2FD1A2" if n_alertas == 0 else "#0B1C2D"
+    fondo_alerta = "#E6FBF4" if n_alertas == 0 else "#FEF3C7"
+    texto_alerta = "#065F46" if n_alertas == 0 else "#92400E"
+    st.markdown(_kpi_badge("Alerta", f"{n_alertas} prod.", "Umbral <= 70 und", acento_alerta, fondo_alerta, texto_alerta), unsafe_allow_html=True)
 
     st.divider()
 
