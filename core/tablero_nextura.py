@@ -152,15 +152,23 @@ def _grafico_barras(df: pd.DataFrame, x_col: str, y_col: str, titulo: str, color
     if df.empty:
         st.info("Sin registros para graficar todavía.")
         return
-    df_plot = df.copy()
-    df_plot[y_col] = pd.to_numeric(df_plot[y_col], errors="coerce").fillna(0)
+    df_plot = df[[x_col, y_col]].copy()
+    df_plot[x_col] = df_plot[x_col].astype(str)
+    df_plot[y_col] = pd.to_numeric(df_plot[y_col], errors="coerce").fillna(0.0)
+    df_plot = df_plot.sort_values(by=y_col, ascending=False).reset_index(drop=True)
+    orden_x = df_plot[x_col].tolist()
+
     es_dinero = ("dinero" in y_col.lower()) or ("venta" in y_col.lower()) or ("($)" in titulo.lower())
     y_titulo = "Valor ($)" if es_dinero else "Unidades"
     num_fmt = "$#,##0" if es_dinero else "#,##0"
+
+    if float(df_plot[y_col].sum()) == 0.0:
+        st.caption(f"Sin movimiento registrado ({'Valor ($): 0' if es_dinero else 'Unidades: 0'}).")
+
     if HAS_ALTAIR:
         x_enc = alt.X(
             f"{x_col}:N",
-            sort="-y",
+            sort=orden_x,
             title=None,
             axis=alt.Axis(labelAngle=-20, labelLimit=0),
         )
@@ -171,19 +179,22 @@ def _grafico_barras(df: pd.DataFrame, x_col: str, y_col: str, titulo: str, color
             .encode(
                 x=x_enc,
                 y=y_enc,
-                tooltip=[x_col, alt.Tooltip(f"{y_col}:Q", title=y_titulo, format=num_fmt)],
+                tooltip=[
+                    alt.Tooltip(f"{x_col}:N", title=x_col),
+                    alt.Tooltip(f"{y_col}:Q", title=y_titulo, format=num_fmt),
+                ],
             )
         )
         texto = (
             alt.Chart(df_plot)
-            .mark_text(dy=-8, fontSize=11, fontWeight="bold")
+            .mark_text(align="center", baseline="bottom", dy=-4, fontSize=11, fontWeight="bold")
             .encode(
                 x=x_enc,
                 y=y_enc,
                 text=alt.Text(f"{y_col}:Q", format=num_fmt),
             )
         )
-        chart = alt.layer(barras, texto).properties(height=220)
+        chart = (barras + texto).properties(height=220)
         st.altair_chart(chart, use_container_width=True)
     else:
         st.bar_chart(df_plot.set_index(x_col)[y_col], height=220)
