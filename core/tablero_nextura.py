@@ -209,7 +209,7 @@ def _grafico_barras(df: pd.DataFrame, x_col: str, y_col: str, titulo: str, color
 
 
 def render_tablero_nextura(conn=None, usuario: str = "OPERADOR_MD") -> None:
-    st.subheader("Tablero de Control NEXTURA · Gobernanza y Cierre")
+    st.subheader("TABLERO DE CONTROL INVENTARIO DIARIO MYD")
     st.caption("Turnos: AM (08:00–13:00) y PM (14:00–17:00) · Tope Principal: 100 und/producto · Alerta CEO: <= 70 und")
 
     if conn is not None:
