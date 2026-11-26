@@ -261,17 +261,17 @@ def _kpi_badge(titulo_etq: str, valor_txt: str, sub_txt: str, acento: str, fondo
 
 c1, c2, c3, c4 = st.columns(4)
 with c1:
-    st.markdown(_kpi_badge("Unidades Totales", _fmt_kpi(total_und), "Existencia global", "#0B1C2D", "#E8EEF5", "#0B1C2D"), unsafe_allow_html=True)
+    st.markdown(_kpi_badge('Unidades Totales', _fmt_kpi(total_und), 'Existencia global', '#0B1C2D', '#E8EEF5', '#0B1C2D'), unsafe_allow_html=True)
 with c2:
-    st.markdown(_kpi_badge("Principal", _fmt_kpi(total_prin), "Tope 100 und/prod", "#0B1C2D", "#E8EEF5", "#0B1C2D"), unsafe_allow_html=True)
+    st.markdown(_kpi_badge('Principal', _fmt_kpi(total_prin), 'Tope 100 und/prod', '#0B1C2D', '#E8EEF5', '#0B1C2D'), unsafe_allow_html=True)
 with c3:
-    st.markdown(_kpi_badge("Bodega", _fmt_kpi(total_bod), "Excedente / respaldo", "#2E2E2E", "#EFEFEF", "#2E2E2E"), unsafe_allow_html=True)
+    st.markdown(_kpi_badge('Bodega', _fmt_kpi(total_bod), 'Excedente / respaldo', '#2E2E2E', '#EFEFEF', '#2E2E2E'), unsafe_allow_html=True)
 with c4:
-    n_alertas = len(alertas_df)
-    acento_alerta = "#2FD1A2" if n_alertas == 0 else "#0B1C2D"
-    fondo_alerta = "#E6FBF4" if n_alertas == 0 else "#FEF3C7"
-    texto_alerta = "#065F46" if n_alertas == 0 else "#92400E"
-    st.markdown(_kpi_badge("Alerta", f"{n_alertas} prod.", "Umbral <= 70 und", acento_alerta, fondo_alerta, texto_alerta), unsafe_allow_html=True)
+    _n_alerta = len(alertas_df)
+    _acento_a = '#2FD1A2' if _n_alerta == 0 else '#0B1C2D'
+    _fondo_a = '#E6FBF4' if _n_alerta == 0 else '#FEF3C7'
+    _texto_a = '#065F46' if _n_alerta == 0 else '#92400E'
+    st.markdown(_kpi_badge('Alerta', f'{_n_alerta} prod.', 'Umbral <= 70 und', _acento_a, _fondo_a, _texto_a), unsafe_allow_html=True)
     st.divider()
 
     g1, g2 = st.columns(2)
