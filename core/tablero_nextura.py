@@ -258,6 +258,19 @@ def _kpi_badge(titulo_etq: str, valor_txt: str, sub_txt: str, acento: str, fondo
         f"</div>"
     )
 
+def _fmt_kpi(val: float) -> str:
+    return f"{int(round(val)):,}" if float(val).is_integer() else f"{val:,.1f}"
+
+def _kpi_badge(titulo_etq: str, valor_txt: str, sub_txt: str, acento: str, fondo_etq: str, texto_etq: str) -> str:
+    import html as _h
+    return (
+        f"<div style='background:#FFFFFF;border:1px solid #E2E8F0;border-top:3px solid {acento};border-radius:10px;padding:10px 12px;margin-bottom:8px;'>"
+        f"<span style='display:inline-block;background:{fondo_etq};color:{texto_etq};font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:0.3px;'>{_h.escape(titulo_etq)}</span>"
+        f"<div style='font-size:22px;font-weight:800;color:#0B1C2D;margin-top:6px;line-height:1.15;'>{_h.escape(valor_txt)}</div>"
+        f"<div style='font-size:11px;color:#2E2E2E;margin-top:4px;opacity:0.85;'>{_h.escape(sub_txt)}</div>"
+        f"</div>"
+    )
+
 c1, c2, c3, c4 = st.columns(4)
 with c1:
     st.markdown(_kpi_badge("Unidades Totales", _fmt_kpi(total_und), "Existencia global", "#0B1C2D", "#E8EEF5", "#0B1C2D"), unsafe_allow_html=True)
@@ -271,7 +284,6 @@ with c4:
     fondo_alerta = "#E6FBF4" if n_alertas == 0 else "#FEF3C7"
     texto_alerta = "#065F46" if n_alertas == 0 else "#92400E"
     st.markdown(_kpi_badge("Alerta", f"{n_alertas} prod.", "Umbral <= 70 und", acento_alerta, fondo_alerta, texto_alerta), unsafe_allow_html=True)
-
     st.divider()
 
     g1, g2 = st.columns(2)
